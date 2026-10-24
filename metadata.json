@@ -1,0 +1,6 @@
+{
+  "name": "ViziMove AI — Visakhapatnam Urban Mobility Platform",
+  "description": "Real-data-driven urban mobility operations, demand forecasting, event intelligence, fleet simulation, and driver repositioning decision-support platform for Visakhapatnam (Vizag), India.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

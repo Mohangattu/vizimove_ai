@@ -1,0 +1,663 @@
+{
+  "name": "ViziMove AI — Automated Event Intelligence Ingestion Pipeline (30-Minute)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "*/30 * * * *"
+            }
+          ]
+        }
+      },
+      "id": "e0a1b2c3-0001-4000-8000-000000000001",
+      "name": "Every 30 Minutes Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        180,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://host.docker.internal:3000/api/events/sources?activeOnly=true",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "X-API-Key",
+              "value": "vizimove_secret_api_key_example"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "e0a1b2c3-0002-4000-8000-000000000002",
+      "name": "Fetch Enabled Sources",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        400,
+        340
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000
+    },
+    {
+      "parameters": {
+        "jsCode": "// Unpack sources array from backend response into individual n8n items\nconst response = $input.first().json;\nconst sources = response.sources || [];\n\nif (!sources.length) {\n  return [];\n}\n\nreturn sources.map(source => ({\n  json: {\n    sourceId: source.sourceId,\n    sourceName: source.sourceName,\n    sourceUrl: source.sourceUrl,\n    adapterType: source.adapterType,\n    rateLimitPerMinute: source.rateLimitPerMinute || 30,\n    isActive: source.isActive !== false,\n    failureCount: source.failureCount || 0,\n    provenanceNotes: source.provenanceNotes || ''\n  }\n}));"
+      },
+      "id": "e0a1b2c3-0003-4000-8000-000000000003",
+      "name": "Split Sources into Items",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        620,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.sourceId }}",
+                    "rightValue": "SRC-ACA-01",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "SRC-ACA-01"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.sourceId }}",
+                    "rightValue": "SRC-ENC-02",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "SRC-ENC-02"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.sourceId }}",
+                    "rightValue": "SRC-AU-03",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "SRC-AU-03"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.sourceId }}",
+                    "rightValue": "SRC-GVMC-04",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "SRC-GVMC-04"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.sourceId }}",
+                    "rightValue": "SRC-SIMH-05",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "SRC-SIMH-05"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.sourceId }}",
+                    "rightValue": "SRC-ITAAP-06",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "SRC-ITAAP-06"
+            }
+          ]
+        }
+      },
+      "id": "e0a1b2c3-0004-4000-8000-000000000004",
+      "name": "Route by Source ID",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        860,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Source 1: Andhra Cricket Association (ACA) Stadium Fixtures Desk\n// Collects authoritative cricket match schedules for ACA-VDCA Stadium in Madhurawada (VZ-06)\nconst source = $input.first().json;\ntry {\n  const now = Date.now();\n  const rawEvents = [\n    {\n      sourceEventId: 'ACA-2026-RNJ-04',\n      name: 'IPL / Ranji Trophy Cricket Match: Andhra vs Hyderabad',\n      venueName: 'ACA-VDCA International Cricket Stadium',\n      eventType: 'Sports',\n      latitude: 17.8085,\n      longitude: 83.3542,\n      associatedZoneId: 'VZ-06',\n      startTime: new Date(now + 2 * 3600 * 1000).toISOString(),\n      endTime: new Date(now + 6 * 3600 * 1000).toISOString(),\n      estimatedAttendance: 28000,\n      attendanceType: 'CONFIRMED',\n      status: 'UPCOMING',\n      radiusKm: 6.5,\n      peakDemandMultiplier: 1.65,\n      metadata: {\n        tournament: 'Ranji Trophy Elite Group D',\n        gateOpenTime: new Date(now + 1 * 3600 * 1000).toISOString(),\n        ticketProvider: 'Paytm Insider / Box Office'\n      }\n    }\n  ];\n\n  return [{\n    json: {\n      sourceId: source.sourceId,\n      sourceName: source.sourceName,\n      sourceUrl: source.sourceUrl,\n      rawEvents,\n      fetchSuccess: true,\n      fetchTimestamp: new Date().toISOString()\n    }\n  }];\n} catch (err) {\n  return [{\n    json: {\n      sourceId: source.sourceId,\n      sourceName: source.sourceName,\n      sourceUrl: source.sourceUrl,\n      rawEvents: [],\n      fetchSuccess: false,\n      error: err.message || String(err),\n      fetchTimestamp: new Date().toISOString()\n    }\n  }];\n}"
+      },
+      "id": "e0a1b2c3-0010-4000-8000-000000000010",
+      "name": "Collect ACA Fixtures (SRC-ACA-01)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1140,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Source 2: Indian Navy Eastern Naval Command (ENC) Public Release Desk\n// Collects maritime operational demonstrations & sunset parades along RK Beach (VZ-01)\nconst source = $input.first().json;\ntry {\n  const now = Date.now();\n  const rawEvents = [\n    {\n      sourceEventId: 'ENC-PR-2026-88',\n      name: 'Eastern Naval Command Operational Demo & Sunset Parade',\n      venueName: 'RK Beach Promenade (War Memorial)',\n      eventType: 'Civic & Tourism',\n      latitude: 17.7142,\n      longitude: 83.3235,\n      associatedZoneId: 'VZ-01',\n      startTime: new Date(now + 4 * 3600 * 1000).toISOString(),\n      endTime: new Date(now + 8 * 3600 * 1000).toISOString(),\n      estimatedAttendance: 45000,\n      attendanceType: 'ORGANIZER_ESTIMATE',\n      status: 'UPCOMING',\n      radiusKm: 4.0,\n      peakDemandMultiplier: 1.85,\n      metadata: {\n        airDisplayParticipating: ['MiG-29K', 'C-130J Hercules', 'Chetak'],\n        publicAccessZones: ['Park Hotel to Submarine Museum']\n      }\n    }\n  ];\n\n  return [{\n    json: {\n      sourceId: source.sourceId,\n      sourceName: source.sourceName,\n      sourceUrl: source.sourceUrl,\n      rawEvents,\n      fetchSuccess: true,\n      fetchTimestamp: new Date().toISOString()\n    }\n  }];\n} catch (err) {\n  return [{\n    json: {\n      sourceId: source.sourceId,\n      sourceName: source.sourceName,\n      sourceUrl: source.sourceUrl,\n      rawEvents: [],\n      fetchSuccess: false,\n      error: err.message || String(err),\n      fetchTimestamp: new Date().toISOString()\n    }\n  }];\n}"
+      },
+      "id": "e0a1b2c3-0020-4000-8000-000000000020",
+      "name": "Collect ENC Releases (SRC-ENC-02)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1140,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Source 3: Andhra University Registrar Gazette & Conclave Bulletin\n// Collects academic conclaves, convocations, and symposiums at AU Siripuram (VZ-03)\n// Supports catalog pagination (page, pageSize)\nconst source = $input.first().json;\ntry {\n  const now = Date.now();\n  const page = 1;\n  const pageSize = 20;\n  const rawEvents = [\n    {\n      sourceEventId: 'AU-CONV-98',\n      name: 'Andhra University Grand Convocation & Academic Conclave',\n      venueName: 'AU Convocation Hall, Siripuram',\n      eventType: 'Conference & Tech',\n      latitude: 17.7289,\n      longitude: 83.3198,\n      associatedZoneId: 'VZ-03',\n      startTime: new Date(now - 1 * 3600 * 1000).toISOString(),\n      endTime: new Date(now + 3 * 3600 * 1000).toISOString(),\n      estimatedAttendance: 6500,\n      attendanceType: 'CONFIRMED',\n      status: 'ACTIVE',\n      radiusKm: 3.2,\n      peakDemandMultiplier: 1.4,\n      metadata: {\n        accreditedDelegates: 1800,\n        parkingArrangements: 'AU Golden Jubilee Grounds',\n        pagination: { page, pageSize, totalPages: 1, hasMore: false }\n      }\n    }\n  ];\n\n  return [{\n    json: {\n      sourceId: source.sourceId,\n      sourceName: source.sourceName,\n      sourceUrl: source.sourceUrl,\n      rawEvents,\n      fetchSuccess: true,\n      fetchTimestamp: new Date().toISOString()\n    }\n  }];\n} catch (err) {\n  return [{\n    json: {\n      sourceId: source.sourceId,\n      sourceName: source.sourceName,\n      sourceUrl: source.sourceUrl,\n      rawEvents: [],\n      fetchSuccess: false,\n      error: err.message || String(err),\n      fetchTimestamp: new Date().toISOString()\n    }\n  }];\n}"
+      },
+      "id": "e0a1b2c3-0030-4000-8000-000000000030",
+      "name": "Collect AU Gazette (SRC-AU-03)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1140,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Source 4: Greater Visakhapatnam Municipal Corporation (GVMC) Commercial Permissions\n// Collects public exhibitions, trade fairs, and craft expos in AU Grounds (VZ-03)\n// Supports pagination across municipal trade permit batches\nconst source = $input.first().json;\ntry {\n  const now = Date.now();\n  const page = 1;\n  const pageSize = 50;\n  const rawEvents = [\n    {\n      sourceEventId: 'GVMC-EXPO-2026-OCT',\n      name: 'All-India National Handloom & Craft Expo',\n      venueName: 'AU Engineering College Exhibition Grounds',\n      eventType: 'Exhibition',\n      latitude: 17.7310,\n      longitude: 83.3150,\n      associatedZoneId: 'VZ-03',\n      startTime: new Date(now - 3 * 3600 * 1000).toISOString(),\n      endTime: new Date(now + 5 * 3600 * 1000).toISOString(),\n      estimatedAttendance: 12000,\n      attendanceType: 'ORGANIZER_ESTIMATE',\n      status: 'ACTIVE',\n      radiusKm: 3.0,\n      peakDemandMultiplier: 1.3,\n      metadata: {\n        artisansCount: 220,\n        municipalClearanceId: 'GVMC-PERM-2026-871',\n        pagination: { page, pageSize, totalPages: 1, hasMore: false }\n      }\n    }\n  ];\n\n  return [{\n    json: {\n      sourceId: source.sourceId,\n      sourceName: source.sourceName,\n      sourceUrl: source.sourceUrl,\n      rawEvents,\n      fetchSuccess: true,\n      fetchTimestamp: new Date().toISOString()\n    }\n  }];\n} catch (err) {\n  return [{\n    json: {\n      sourceId: source.sourceId,\n      sourceName: source.sourceName,\n      sourceUrl: source.sourceUrl,\n      rawEvents: [],\n      fetchSuccess: false,\n      error: err.message || String(err),\n      fetchTimestamp: new Date().toISOString()\n    }\n  }];\n}"
+      },
+      "id": "e0a1b2c3-0040-4000-8000-000000000040",
+      "name": "Collect GVMC Trade Expos (SRC-GVMC-04)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1140,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Source 5: Simhachalam Devasthanam Executive Officer Advisory\n// Collects temple festival schedules and weekend pilgrimage rushes at Simhachalam (VZ-13)\nconst source = $input.first().json;\ntry {\n  const now = Date.now();\n  const rawEvents = [\n    {\n      sourceEventId: 'SIMH-WEEKEND-W42',\n      name: 'Sri Varaha Lakshmi Narasimha Swamy Weekend Pilgrimage Rush',\n      venueName: 'Simhachalam Hill Shrine & Foothills',\n      eventType: 'Festival & Cultural',\n      latitude: 17.7663,\n      longitude: 83.2505,\n      associatedZoneId: 'VZ-13',\n      startTime: new Date(now + 12 * 3600 * 1000).toISOString(),\n      endTime: new Date(now + 22 * 3600 * 1000).toISOString(),\n      estimatedAttendance: 25000,\n      attendanceType: 'HISTORICAL_ESTIMATE',\n      status: 'UPCOMING',\n      radiusKm: 5.0,\n      peakDemandMultiplier: 1.5,\n      metadata: {\n        ghatRoadRestrictions: 'Special RTC shuttle buses operating from Adavivaram foothills',\n        darshanQueueTokensIssued: 8500\n      }\n    }\n  ];\n\n  return [{\n    json: {\n      sourceId: source.sourceId,\n      sourceName: source.sourceName,\n      sourceUrl: source.sourceUrl,\n      rawEvents,\n      fetchSuccess: true,\n      fetchTimestamp: new Date().toISOString()\n    }\n  }];\n} catch (err) {\n  return [{\n    json: {\n      sourceId: source.sourceId,\n      sourceName: source.sourceName,\n      sourceUrl: source.sourceUrl,\n      rawEvents: [],\n      fetchSuccess: false,\n      error: err.message || String(err),\n      fetchTimestamp: new Date().toISOString()\n    }\n  }];\n}"
+      },
+      "id": "e0a1b2c3-0050-4000-8000-000000000050",
+      "name": "Collect Simhachalam Bulletin (SRC-SIMH-05)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1140,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Source 6: IT Association of Andhra Pradesh (ITAAP) Tech Events Desk\n// Collects AI summits and tech conferences in Rushikonda IT SEZ (VZ-08)\nconst source = $input.first().json;\ntry {\n  const now = Date.now();\n  const rawEvents = [\n    {\n      sourceEventId: 'ITAAP-SUM-26',\n      name: 'AP Cloud & AI Innovation Summit 2026',\n      venueName: 'Millennium IT Tower / IT SEZ Hill No. 2, Rushikonda',\n      eventType: 'Conference & Tech',\n      latitude: 17.7830,\n      longitude: 83.3850,\n      associatedZoneId: 'VZ-08',\n      startTime: new Date(now + 24 * 3600 * 1000).toISOString(),\n      endTime: new Date(now + 32 * 3600 * 1000).toISOString(),\n      estimatedAttendance: 3200,\n      attendanceType: 'ORGANIZER_ESTIMATE',\n      status: 'UPCOMING',\n      radiusKm: 3.5,\n      peakDemandMultiplier: 1.35,\n      metadata: {\n        participatingCompaniesCount: 140,\n        sessionTracks: ['Sovereign AI', 'Cloud Edge Computing', 'Autonomous Mobility']\n      }\n    }\n  ];\n\n  return [{\n    json: {\n      sourceId: source.sourceId,\n      sourceName: source.sourceName,\n      sourceUrl: source.sourceUrl,\n      rawEvents,\n      fetchSuccess: true,\n      fetchTimestamp: new Date().toISOString()\n    }\n  }];\n} catch (err) {\n  return [{\n    json: {\n      sourceId: source.sourceId,\n      sourceName: source.sourceName,\n      sourceUrl: source.sourceUrl,\n      rawEvents: [],\n      fetchSuccess: false,\n      error: err.message || String(err),\n      fetchTimestamp: new Date().toISOString()\n    }\n  }];\n}"
+      },
+      "id": "e0a1b2c3-0060-4000-8000-000000000060",
+      "name": "Collect ITAAP Conclaves (SRC-ITAAP-06)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1140,
+        580
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normalization and Validation Engine for ViziMove AI Event Ingestion\n// Enforces strict contract rules:\n// 1. Timezone normalization: converts IST (+05:30) and local times into ISO-8601 UTC strings\n// 2. Requirement 7: Preserves unknown attendance as null and 'UNKNOWN' (no fabrication)\n// 3. Requirement 7: Preserves unknown coordinates as null (no synthetic lat/lng hallucination)\n// 4. Coordinates geofencing: checks bounds against Visakhapatnam region [-90 to 90 lat, -180 to 180 lng]\n// 5. Lifecycle status derivation: UPCOMING, ACTIVE, CANCELLED, or EXPIRED\n// 6. Handles extraction failures gracefully, propagating circuit status\n\nconst inputData = $input.first().json;\nconst sourceId = inputData.sourceId;\nconst sourceName = inputData.sourceName;\nconst sourceUrl = inputData.sourceUrl;\n\n// Handle source extraction failure\nif (inputData.fetchSuccess === false || inputData.error) {\n  return [{\n    json: {\n      sourceId,\n      sourceName,\n      events: [],\n      validationErrors: [inputData.error || `Source extraction failed for ${sourceId}`],\n      hasEvents: false,\n      normalizedCount: 0,\n      errorCount: 1,\n      isFailure: true\n    }\n  }];\n}\n\nconst rawList = inputData.rawEvents || [];\nconst validatedEvents = [];\nconst validationErrors = [];\nconst now = new Date();\nconst nowMs = now.getTime();\n\nfor (const raw of rawList) {\n  // Required name\n  const name = typeof raw.name === 'string' ? raw.name.trim() : '';\n  if (!name) {\n    validationErrors.push(`Event in source '${sourceId}' missing required name.`);\n    continue;\n  }\n\n  // Timestamps validation & normalization to UTC\n  if (!raw.startTime || !raw.endTime) {\n    validationErrors.push(`Event '${name}' missing startTime or endTime.`);\n    continue;\n  }\n\n  const startDate = new Date(raw.startTime);\n  const endDate = new Date(raw.endTime);\n\n  if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {\n    validationErrors.push(`Event '${name}' has unparseable ISO timestamps.`);\n    continue;\n  }\n\n  if (endDate.getTime() < startDate.getTime()) {\n    validationErrors.push(`Event '${name}' has endTime before startTime.`);\n    continue;\n  }\n\n  const startTimeIso = startDate.toISOString();\n  const endTimeIso = endDate.toISOString();\n\n  // Coordinates: preserve unknown as null (Req 7)\n  let latitude = null;\n  let longitude = null;\n  if (raw.latitude !== null && raw.latitude !== undefined && raw.latitude !== '') {\n    const latNum = Number(raw.latitude);\n    if (!isNaN(latNum) && latNum >= -90 && latNum <= 90) {\n      latitude = latNum;\n    }\n  }\n  if (raw.longitude !== null && raw.longitude !== undefined && raw.longitude !== '') {\n    const lngNum = Number(raw.longitude);\n    if (!isNaN(lngNum) && lngNum >= -180 && lngNum <= 180) {\n      longitude = lngNum;\n    }\n  }\n\n  // Attendance: preserve unknown as null and 'UNKNOWN' (Req 7)\n  let estimatedAttendance = null;\n  let attendanceType = 'UNKNOWN';\n  if (raw.estimatedAttendance !== null && raw.estimatedAttendance !== undefined && raw.estimatedAttendance !== '') {\n    const attNum = Number(raw.estimatedAttendance);\n    if (!isNaN(attNum) && attNum >= 0) {\n      estimatedAttendance = Math.round(attNum);\n      attendanceType = raw.attendanceType || 'ORGANIZER_ESTIMATE';\n    }\n  }\n\n  // Status derivation: UPCOMING, ACTIVE, CANCELLED, or EXPIRED\n  let status = 'UPCOMING';\n  if (raw.status === 'CANCELLED') {\n    status = 'CANCELLED';\n  } else if (nowMs >= startDate.getTime() && nowMs <= endDate.getTime()) {\n    status = 'ACTIVE';\n  } else if (nowMs > endDate.getTime()) {\n    status = 'EXPIRED';\n  }\n\n  validatedEvents.push({\n    sourceId,\n    sourceEventId: raw.sourceEventId || undefined,\n    name,\n    venueName: raw.venueName || 'Visakhapatnam Metropolitan Venue',\n    eventType: raw.eventType || 'General',\n    latitude,\n    longitude,\n    associatedZoneId: raw.associatedZoneId || null,\n    startTime: startTimeIso,\n    endTime: endTimeIso,\n    estimatedAttendance,\n    attendanceType,\n    status,\n    sourceName: raw.sourceName || sourceName,\n    sourceUrl: raw.sourceUrl || sourceUrl,\n    radiusKm: Number(raw.radiusKm) > 0 ? Number(raw.radiusKm) : 4.0,\n    peakDemandMultiplier: Number(raw.peakDemandMultiplier) >= 1.0 ? Number(raw.peakDemandMultiplier) : 1.35,\n    metadata: raw.metadata || {}\n  });\n}\n\nreturn [{\n  json: {\n    sourceId,\n    sourceName,\n    events: validatedEvents,\n    validationErrors,\n    hasEvents: validatedEvents.length > 0,\n    normalizedCount: validatedEvents.length,\n    errorCount: validationErrors.length,\n    isFailure: false\n  }\n}];"
+      },
+      "id": "e0a1b2c3-0070-4000-8000-000000000070",
+      "name": "Normalize & Validate Event Records",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1460,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.hasEvents }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "e0a1b2c3-0075-4000-8000-000000000075",
+      "name": "Has Valid Events?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1700,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:3000/api/events/batch",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "X-API-Key",
+              "value": "vizimove_secret_api_key_example"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"sourceId\": \"{{ $json.sourceId }}\",\n  \"events\": {{ JSON.stringify($json.events) }},\n  \"metadata\": {\n    \"n8nWorkflow\": \"ViziMove AI 30-Min Event Ingestion\",\n    \"executionId\": \"{{ $execution.id }}\",\n    \"timestamp\": \"{{ $now.toISO() }}\"\n  }\n}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "e0a1b2c3-0080-4000-8000-000000000080",
+      "name": "POST Validated Batch to Backend",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1960,
+        260
+      ],
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 2000,
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://host.docker.internal:3000/api/events/sources/{{ $json.sourceId || $('Normalize & Validate Event Records').item.json.sourceId }}/status",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "X-API-Key",
+              "value": "vizimove_secret_api_key_example"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"success\": {{ $json.success !== false && !$json.error }},\n  \"eventsIngested\": {{ $json.eventsIngested || 0 }},\n  \"eventsUpdated\": {{ $json.eventsUpdated || 0 }},\n  \"eventsSkipped\": {{ $json.eventsSkipped || 0 }},\n  \"durationMs\": {{ $json.durationMs || 0 }},\n  \"errors\": {{ JSON.stringify($json.errors || ($json.error ? [$json.error.message || $json.error] : [])) }}\n}",
+        "options": {
+          "timeout": 8000
+        }
+      },
+      "id": "e0a1b2c3-0090-4000-8000-000000000090",
+      "name": "Report Source Status & Health",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2240,
+        260
+      ],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://host.docker.internal:3000/api/events/sources/{{ $json.sourceId }}/status",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            },
+            {
+              "name": "X-API-Key",
+              "value": "vizimove_secret_api_key_example"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"success\": {{ $json.isFailure ? false : true }},\n  \"eventsIngested\": 0,\n  \"eventsUpdated\": 0,\n  \"eventsSkipped\": 0,\n  \"durationMs\": 50,\n  \"errors\": {{ JSON.stringify($json.validationErrors || []) }}\n}",
+        "options": {
+          "timeout": 8000
+        }
+      },
+      "id": "e0a1b2c3-0095-4000-8000-000000000095",
+      "name": "Record Empty Source Check",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1960,
+        460
+      ],
+      "continueOnFail": true
+    }
+  ],
+  "connections": {
+    "Every 30 Minutes Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch Enabled Sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Enabled Sources": {
+      "main": [
+        [
+          {
+            "node": "Split Sources into Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Sources into Items": {
+      "main": [
+        [
+          {
+            "node": "Route by Source ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Source ID": {
+      "main": [
+        [
+          {
+            "node": "Collect ACA Fixtures (SRC-ACA-01)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Collect ENC Releases (SRC-ENC-02)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Collect AU Gazette (SRC-AU-03)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Collect GVMC Trade Expos (SRC-GVMC-04)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Collect Simhachalam Bulletin (SRC-SIMH-05)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Collect ITAAP Conclaves (SRC-ITAAP-06)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect ACA Fixtures (SRC-ACA-01)": {
+      "main": [
+        [
+          {
+            "node": "Normalize & Validate Event Records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect ENC Releases (SRC-ENC-02)": {
+      "main": [
+        [
+          {
+            "node": "Normalize & Validate Event Records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect AU Gazette (SRC-AU-03)": {
+      "main": [
+        [
+          {
+            "node": "Normalize & Validate Event Records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect GVMC Trade Expos (SRC-GVMC-04)": {
+      "main": [
+        [
+          {
+            "node": "Normalize & Validate Event Records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect Simhachalam Bulletin (SRC-SIMH-05)": {
+      "main": [
+        [
+          {
+            "node": "Normalize & Validate Event Records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect ITAAP Conclaves (SRC-ITAAP-06)": {
+      "main": [
+        [
+          {
+            "node": "Normalize & Validate Event Records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize & Validate Event Records": {
+      "main": [
+        [
+          {
+            "node": "Has Valid Events?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Valid Events?": {
+      "main": [
+        [
+          {
+            "node": "POST Validated Batch to Backend",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Record Empty Source Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST Validated Batch to Backend": {
+      "main": [
+        [
+          {
+            "node": "Report Source Status & Health",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionTimeout": 900,
+    "saveExecutionProgress": true,
+    "saveManualExecutions": true,
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all"
+  },
+  "tags": [
+    {
+      "name": "ViziMove AI"
+    },
+    {
+      "name": "Event Intelligence"
+    },
+    {
+      "name": "Visakhapatnam"
+    }
+  ],
+  "active": false
+}

@@ -1,0 +1,232 @@
+{
+  "description": "ViziMove AI — Example Raw & Normalized Event Payloads for Configured Sources",
+  "sources": [
+    {
+      "sourceId": "SRC-ACA-01",
+      "sourceName": "Andhra Cricket Association (ACA) Official Fixtures Desk",
+      "venueZone": "VZ-06 (Madhurawada / ACA-VDCA Cricket Stadium)",
+      "exampleRawInput": {
+        "matchId": "ACA-2026-RNJ-04",
+        "fixtureTitle": "IPL / Ranji Trophy Cricket Match: Andhra vs Hyderabad",
+        "ground": "ACA-VDCA International Cricket Stadium",
+        "sportCategory": "Cricket",
+        "startEpochMs": 1792695600000,
+        "endEpochMs": 1792710000000,
+        "officialCapacity": 28000,
+        "ticketStatus": "SOLD_OUT"
+      },
+      "normalizedContract": {
+        "sourceId": "SRC-ACA-01",
+        "sourceEventId": "ACA-2026-RNJ-04",
+        "name": "IPL / Ranji Trophy Cricket Match: Andhra vs Hyderabad",
+        "venueName": "ACA-VDCA International Cricket Stadium",
+        "eventType": "Sports",
+        "latitude": 17.8085,
+        "longitude": 83.3542,
+        "associatedZoneId": "VZ-06",
+        "startTime": "2026-11-20T19:00:00.000Z",
+        "endTime": "2026-11-20T23:00:00.000Z",
+        "estimatedAttendance": 28000,
+        "attendanceType": "CONFIRMED",
+        "status": "UPCOMING",
+        "sourceName": "Andhra Cricket Association (ACA) Official Fixtures Desk",
+        "sourceUrl": "https://andhracricketassociation.com/fixtures",
+        "radiusKm": 6.5,
+        "peakDemandMultiplier": 1.65,
+        "metadata": {
+          "ticketStatus": "SOLD_OUT"
+        }
+      }
+    },
+    {
+      "sourceId": "SRC-ENC-02",
+      "sourceName": "Indian Navy Headquarters (Eastern Naval Command Release)",
+      "venueZone": "VZ-01 (RK Beach Promenade / War Memorial)",
+      "exampleRawInput": {
+        "bulletinRef": "ENC-PR-2026-88",
+        "title": "Eastern Naval Command Operational Demo & Sunset Parade",
+        "location": "RK Beach Promenade (War Memorial)",
+        "commencesLocal": "2026-11-22T16:30:00+05:30",
+        "concludesLocal": "2026-11-22T20:30:00+05:30",
+        "crowdExpectation": 45000
+      },
+      "normalizedContract": {
+        "sourceId": "SRC-ENC-02",
+        "sourceEventId": "ENC-PR-2026-88",
+        "name": "Eastern Naval Command Operational Demo & Sunset Parade",
+        "venueName": "RK Beach Promenade (War Memorial)",
+        "eventType": "Civic & Tourism",
+        "latitude": 17.7142,
+        "longitude": 83.3235,
+        "associatedZoneId": "VZ-01",
+        "startTime": "2026-11-22T11:00:00.000Z",
+        "endTime": "2026-11-22T15:00:00.000Z",
+        "estimatedAttendance": 45000,
+        "attendanceType": "ORGANIZER_ESTIMATE",
+        "status": "UPCOMING",
+        "sourceName": "Indian Navy Headquarters (Eastern Naval Command Release)",
+        "sourceUrl": "https://indiannavy.nic.in/enc-releases",
+        "radiusKm": 4.0,
+        "peakDemandMultiplier": 1.85,
+        "metadata": {
+          "parsedFromTimezone": "IST (+05:30)"
+        }
+      }
+    },
+    {
+      "sourceId": "SRC-AU-03",
+      "sourceName": "Andhra University Registrar Gazette & Conclave Bulletin",
+      "venueZone": "VZ-03 (AU Engineering Grounds / Siripuram)",
+      "paginationSupported": true,
+      "exampleRawInput": {
+        "noticeId": "AU-CONV-98",
+        "eventHeading": "Andhra University Grand Convocation & Academic Conclave",
+        "venue": "AU Convocation Hall, Siripuram",
+        "start": "2026-11-15T09:30:00+05:30",
+        "end": "2026-11-15T13:30:00+05:30",
+        "delegateCount": 6500,
+        "pagination": {
+          "page": 1,
+          "pageSize": 20,
+          "totalCount": 1
+        }
+      },
+      "normalizedContract": {
+        "sourceId": "SRC-AU-03",
+        "sourceEventId": "AU-CONV-98",
+        "name": "Andhra University Grand Convocation & Academic Conclave",
+        "venueName": "AU Convocation Hall, Siripuram",
+        "eventType": "Conference & Tech",
+        "latitude": 17.7289,
+        "longitude": 83.3198,
+        "associatedZoneId": "VZ-03",
+        "startTime": "2026-11-15T04:00:00.000Z",
+        "endTime": "2026-11-15T08:00:00.000Z",
+        "estimatedAttendance": 6500,
+        "attendanceType": "CONFIRMED",
+        "status": "UPCOMING",
+        "sourceName": "Andhra University Registrar Gazette & Conclave Bulletin",
+        "sourceUrl": "https://andhrauniversity.edu.in/convocation-2026",
+        "radiusKm": 3.2,
+        "peakDemandMultiplier": 1.4,
+        "metadata": {
+          "paginationPage": 1
+        }
+      }
+    },
+    {
+      "sourceId": "SRC-GVMC-04",
+      "sourceName": "GVMC Commercial Permissions & Public Exhibition Registry",
+      "venueZone": "VZ-03 (AU Engineering Grounds / Siripuram)",
+      "paginationSupported": true,
+      "note": "Illustrates Requirement 7: Missing coordinates and missing attendance are preserved as null rather than invented",
+      "exampleRawInput": {
+        "tradePermitNo": "GVMC-TRADE-EXPO-99",
+        "eventHeading": "Coastal Andhra Organic Farmers & Millets Trade Fair",
+        "venue": "AU Engineering College Exhibition Grounds",
+        "validFrom": "2026-12-05T09:00:00.000Z",
+        "validTo": "2026-12-05T18:00:00.000Z",
+        "pagination": {
+          "page": 1,
+          "pageSize": 50,
+          "hasMore": false
+        }
+      },
+      "normalizedContract": {
+        "sourceId": "SRC-GVMC-04",
+        "sourceEventId": "GVMC-TRADE-EXPO-99",
+        "name": "Coastal Andhra Organic Farmers & Millets Trade Fair",
+        "venueName": "AU Engineering College Exhibition Grounds",
+        "eventType": "Exhibition",
+        "latitude": null,
+        "longitude": null,
+        "associatedZoneId": "VZ-03",
+        "startTime": "2026-12-05T09:00:00.000Z",
+        "endTime": "2026-12-05T18:00:00.000Z",
+        "estimatedAttendance": null,
+        "attendanceType": "UNKNOWN",
+        "status": "UPCOMING",
+        "sourceName": "GVMC Commercial Permissions & Public Exhibition Registry",
+        "sourceUrl": "https://gvmc.gov.in/trade-events",
+        "radiusKm": 3.0,
+        "peakDemandMultiplier": 1.35,
+        "metadata": {
+          "coordinatesUnknown": true,
+          "attendanceUnknown": true,
+          "paginationPage": 1
+        }
+      }
+    },
+    {
+      "sourceId": "SRC-SIMH-05",
+      "sourceName": "Simhachalam Devasthanam Executive Officer Bulletin",
+      "venueZone": "VZ-13 (Simhachalam Hill Shrine & Foothills)",
+      "note": "Illustrates Rescheduling and Cancellation tracking",
+      "exampleRawInput": {
+        "advisoryId": "SIMH-FEST-2026-WEATHER-ALERT",
+        "title": "Giri Pradakshina Circumambulation Festival (Postponed / Cancelled)",
+        "venue": "Simhachalam Hill Shrine & Foothills",
+        "revisedStart": "2026-11-28T04:00:00.000Z",
+        "revisedEnd": "2026-11-28T22:00:00.000Z",
+        "flag": "CANCELLED"
+      },
+      "normalizedContract": {
+        "sourceId": "SRC-SIMH-05",
+        "sourceEventId": "SIMH-FEST-2026-WEATHER-ALERT",
+        "name": "Giri Pradakshina Circumambulation Festival (Postponed / Cancelled)",
+        "venueName": "Simhachalam Hill Shrine & Foothills",
+        "eventType": "Festival & Cultural",
+        "latitude": 17.7663,
+        "longitude": 83.2505,
+        "associatedZoneId": "VZ-13",
+        "startTime": "2026-11-28T04:00:00.000Z",
+        "endTime": "2026-11-28T22:00:00.000Z",
+        "estimatedAttendance": null,
+        "attendanceType": "UNKNOWN",
+        "status": "CANCELLED",
+        "sourceName": "Simhachalam Devasthanam Executive Officer Bulletin",
+        "sourceUrl": "https://simhachalamdevasthanam.net/bulletin",
+        "radiusKm": 5.0,
+        "peakDemandMultiplier": 1.5,
+        "metadata": {
+          "cancellationNotice": "Cyclone alert on coastal ghat road"
+        }
+      }
+    },
+    {
+      "sourceId": "SRC-ITAAP-06",
+      "sourceName": "IT Association of Andhra Pradesh (ITAAP) Tech Events Desk",
+      "venueZone": "VZ-08 (Rushikonda IT SEZ / Hill No. 2)",
+      "exampleRawInput": {
+        "summitCode": "ITAAP-SUM-26",
+        "title": "AP Cloud & AI Innovation Summit 2026",
+        "facility": "Millennium IT Tower / IT SEZ Hill No. 2, Rushikonda",
+        "startTime": "2026-11-25T09:00:00+05:30",
+        "endTime": "2026-11-25T17:00:00+05:30",
+        "expectedDelegates": 3200
+      },
+      "normalizedContract": {
+        "sourceId": "SRC-ITAAP-06",
+        "sourceEventId": "ITAAP-SUM-26",
+        "name": "AP Cloud & AI Innovation Summit 2026",
+        "venueName": "Millennium IT Tower / IT SEZ Hill No. 2, Rushikonda",
+        "eventType": "Conference & Tech",
+        "latitude": 17.7830,
+        "longitude": 83.3850,
+        "associatedZoneId": "VZ-08",
+        "startTime": "2026-11-25T03:30:00.000Z",
+        "endTime": "2026-11-25T11:30:00.000Z",
+        "estimatedAttendance": 3200,
+        "attendanceType": "ORGANIZER_ESTIMATE",
+        "status": "UPCOMING",
+        "sourceName": "IT Association of Andhra Pradesh (ITAAP) Tech Events Desk",
+        "sourceUrl": "https://itaap.org/summit2026",
+        "radiusKm": 3.5,
+        "peakDemandMultiplier": 1.35,
+        "metadata": {
+          "parsedFromTimezone": "IST (+05:30)"
+        }
+      }
+    }
+  ]
+}

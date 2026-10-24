@@ -1,0 +1,31 @@
+{
+  "project_type": "TypeScript/Node.js Express backend + React/TypeScript frontend (full-stack SPA served by Vite in dev, static in prod)",
+  "language": "TypeScript",
+  "build_system": "Vite (frontend bundler) + tsx (TypeScript Node.js runner for server). No separate compile step — tsx runs server.ts directly. ESM modules throughout (`\"type\": \"module\"` in package.json). Import paths in test files use `.ts` extension explicitly.",
+  "test_framework": "Node.js built-in test runner (`node:test` + `node:assert/strict`). Test command runs all `*.test.ts` files under src/lib/. Tests import with `.ts` extension (e.g. `import { ... } from './fleet.ts'`).",
+  "build_command": "npm run build",
+  "test_command": "npm run test",
+  "lint_command": "npm run lint",
+  "verification_instructions": "1. Run `npm run lint` (tsc --noEmit) to confirm zero TypeScript errors. 2. Run `npm run test` to run all test files. 3. Run `npm run build` to confirm Vite frontend build succeeds.",
+  "snapshot_or_generated_files": "data/vizimove_store.json (auto-generated persistent JSON store — do NOT edit manually). Created by PersistentStore on first run.",
+  "environment_constraints": "Windows PowerShell. Server runs on port 3000. Do not restart the dev server during tests. Auth uses VIZIMOVE_API_KEY env var; tests use process.env.VIZIMOVE_API_KEY || 'vizimove_secret_api_key_example' as the test secret.",
+  "contribution_requirements": "No AGENTS.md or CONTRIBUTING.md found. Follow existing code patterns: ESM imports, explicit .ts extensions in test imports, Node.js test runner (not Jest/Vitest), same-origin CSRF auth for mutations.",
+  "key_patterns": "1. Persistent state lives in `persistentStore` (src/db/store.ts) — all vehicle/recommendation reads and writes go through it. 2. `globalFleetManager` and `globalRecommendationEngine` and `globalPipelineScheduler` are module-level singletons imported from their respective files. 3. Fleet state transitions: AVAILABLE → EN_ROUTE via `assignRepositioning()` or `dispatchReposition()`; EN_ROUTE → AVAILABLE via `progressAutonomousMovements()` (arrival) or cancellation rollback. 4. The 15-min pipeline scheduler (pipelineScheduler.ts) is the PRIMARY autonomous dispatch path — it already creates DISPATCHED recommendations and assigns vehicles. 5. `recommendations.ts RecommendationEngine` is a LEGACY engine (seeded on startup, manual dispatch). 6. `DriverRecommendation.allocatedVehicleIds` = the vehicle IDs assigned to this recommendation. 7. Constraint values: max 12 km distance, max 32 min travel time, source reserve ≥ 3 vehicles, 70% surplus take rate, min 2 vehicles per dispatch, max 15 vehicles per dispatch, battery threshold 20%. 8. Tests use `test()` not `describe()` blocks. Import `{ test }` from 'node:test' and `assert` from 'node:assert/strict'.",
+  "relevant_files": [
+    "src/lib/types.ts",
+    "src/lib/fleet.ts",
+    "src/lib/recommendations.ts",
+    "src/lib/pipelineScheduler.ts",
+    "src/lib/operations.ts",
+    "src/lib/zones.ts",
+    "src/db/store.ts",
+    "server.ts",
+    "src/services/api.ts",
+    "src/components/views/RecommendationsView.tsx",
+    "src/components/views/FleetOperationsView.tsx",
+    "src/components/views/OverviewView.tsx",
+    "src/lib/algorithms.test.ts",
+    "src/lib/auth.test.ts"
+  ],
+  "directory_structure": "d:/viz 1/ — workspace root. src/lib/ — core logic (fleet, recommendations, pipeline, types, zones, events, operations, supply demand, calibration, forecasting, auth, n8nNotifier). src/db/ — store.ts (JSON flat file persistence). src/services/ — api.ts (frontend API client). src/components/views/ — React view components. server.ts — Express server + API routes. data/ — vizimove_store.json (auto-generated). n8n/ — n8n workflow JSON. .agents/tasks/autonomous-dispatch/ — planning artifacts."
+}
