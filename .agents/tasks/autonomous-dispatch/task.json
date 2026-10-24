@@ -1,0 +1,7 @@
+{
+  "task_id": "task-autonomous-dispatch",
+  "task_description": "Modify ViziMove AI so Driver Recommendations are dispatched fully autonomously — no manual human-approval step. Add autonomousDispatch() function to FleetManager with constraint validation and atomic rollback, wire it into the pipeline scheduler, fix cancellation to release vehicles, add dispatch status API endpoint, deprecate manual dispatch endpoint (410), update all three dashboard views to remove approval UI and add autonomous monitoring, and write comprehensive dispatch tests.",
+  "status": "completed",
+  "feature_order": ["FEAT-001", "FEAT-002"],
+  "blocked_reason": null
+}
