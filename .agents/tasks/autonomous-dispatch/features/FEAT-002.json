@@ -1,0 +1,36 @@
+{
+  "id": "FEAT-002",
+  "type": "feat",
+  "description": "Frontend and test changes: update RecommendationsView, OverviewView, FleetOperationsView to remove manual dispatch UI and add autonomous dispatch monitoring, add api.getDispatchStatus() to api.ts, and write autonomousDispatch.test.ts covering all dispatch scenarios. FEAT-002 is independent of FEAT-001 in terms of file overlap (no shared files modified by both) except that the frontend components depend on the API endpoint and type changes introduced in FEAT-001, so FEAT-001 must be committed first.",
+  "status": "completed",
+  "steps": [
+    "1. Edit src/services/api.ts: Add getDispatchStatus() method after triggerPipelineCycle(): async getDispatchStatus(): Promise<{autonomousDispatchEnabled:boolean; mode:string; lastCycleTimestamp:string|null; lastCycleId:string|null; dispatchedThisCycle:number; pendingCount:number; dispatchedCount:number; failedCount:number; enRouteVehicles:number}> { return fetchJson('/api/dispatch/status'); }",
+
+    "2. Edit src/components/views/RecommendationsView.tsx: (a) Remove handleDispatch() function and its api.dispatchRecommendation() call. Remove Play import (unused after removal). (b) Add dispatchStatus state: useState<any>(null). In the loadPipelineAndFleet useEffect, add api.getDispatchStatus().then(s => setDispatchStatus(s)).catch(()=>{}). (c) Replace the existing dispatchAlert banner with an Autonomous Dispatch Banner: a green/emerald banner showing 'AUTONOMOUS DISPATCH ACTIVE', last cycle time from dispatchStatus.lastCycleTimestamp, dispatched this cycle count, pending count. (d) In the card actions footer, for rec.status === 'PENDING' block: remove the Dispatch button, replace with a 'Queued — next 15-min cycle' amber badge using Clock icon. (e) For rec.status === 'DISPATCHED' cards: keep the Cancel button (added XCircle). Add dispatchedAt display if rec.dispatchedAt is set. (f) Show rec.dispatchError in a red alert row if present on the card. (g) Update the filter footer count label from 'X pending dispatch' to 'X queued for next cycle'.",
+
+    "3. Edit src/components/views/OverviewView.tsx: (a) Remove the 'Dispatch Repositioning' button from the recommendation mini-cards in the 'Recommended Driver Repositionings' panel. Replace with 'View Details' button that navigates to recommendations tab. (b) Add dispatchStatus state: useState<any>(null). In a useEffect alongside the existing pipelineStatus fetch, add api.getDispatchStatus().then(setDispatchStatus).catch(()=>{}). (c) Add an Autonomous Dispatch KPI card as the 5th card in the top KPI grid (changed grid to lg:grid-cols-5). The card uses Sparkles icon, shows 'ENABLED', green emerald color, and sub-text with last cycle time from dispatchStatus. (d) Keep the onDispatchRec prop in the OverviewViewProps interface. (e) Changed panel title to 'Queued Repositionings'. (f) Added status badge on each rec mini-card header alongside priority badge.",
+
+    "4. Edit src/components/views/FleetOperationsView.tsx: (a) In the Assigned Movements table header h3 element, added a SIMULATED badge after the title text. (b) In the vehicle roster table rows, for EN_ROUTE vehicles in the movement assignment column, appended '· Sim' to the 'En route to...' badge. (c) In the fleet state counts row, changed the 'Repositioning' sub-label under the En Route count to 'Repositioning (Simulated)'.",
+
+    "5. Create src/lib/autonomousDispatch.test.ts: 10 test cases using node:test and node:assert/strict following algorithms.test.ts pattern. Tests: (1) eligible dispatch, (2) insufficient surplus, (3) low battery rejection, (4) distance > 12km rejection, (5) travel time > 32min rejection, (6) duplicate dispatch prevention, (7) partial failure rollback (monkey-patched updateVehicle to fail mid-commit), (8) cancellation releases vehicles, (9) simulated arrival completion, (10) pipeline does not re-dispatch same zone pair within 15-min window. All 10 pass."
+  ],
+  "acceptance_criteria": [
+    "npm run lint passes with zero TypeScript errors",
+    "npm run test passes including all 10 new tests in autonomousDispatch.test.ts",
+    "RecommendationsView renders no 'Dispatch' button for any PENDING recommendation",
+    "RecommendationsView shows 'Queued — next 15-min cycle' badge for PENDING recommendations",
+    "RecommendationsView shows autonomous dispatch banner with last cycle time",
+    "OverviewView shows Autonomous Dispatch KPI card with ENABLED status",
+    "OverviewView recommendation cards have no Dispatch button",
+    "FleetOperationsView shows SIMULATED badge on movement table header",
+    "FleetOperationsView EN_ROUTE vehicle rows in roster show '· Sim' suffix",
+    "api.getDispatchStatus() method exists and returns the correct shape"
+  ],
+  "verification": [
+    "npm run lint — zero TypeScript errors (confirmed)",
+    "npm run test — all 10 new autonomousDispatch.test.ts tests pass; 61/62 total pass; 1 pre-existing failure in n8nWorkflow.test.ts (hardcoded secret in n8n JSON — pre-dates FEAT-002, documented in FEAT-001 findings)",
+    "npm run build — Vite frontend build completed without errors (414 kB bundle, 940ms)"
+  ],
+  "blocked_reason": null,
+  "findings": "1. All 10 autonomousDispatch.test.ts tests pass. 2. api.ts now has getDispatchStatus() returning the correct shape. 3. RecommendationsView: removed handleDispatch(), Play import, dispatchAlert state; added dispatchStatus state + autonomous banner; PENDING card shows amber 'Queued — next 15-min cycle' badge; DISPATCHED card shows dispatchedAt + Cancel button; dispatchError shown as red alert row. 4. OverviewView: KPI grid changed to lg:grid-cols-5; Autonomous Dispatch KPI card added with Sparkles icon and emerald color; Dispatch Repositioning button replaced with View Details button; status badge added to rec mini-cards; panel title changed to 'Queued Repositionings'. 5. FleetOperationsView: SIMULATED badge on movements table header; '· Sim' suffix on EN_ROUTE roster badge; 'Repositioning (Simulated)' sub-label on En Route count card. 6. Pre-existing test failure: n8nWorkflow.test.ts 'Structural integrity' fails because n8n JSON contains literal 'vizimove_secret_api_key_example' — this failure pre-dates FEAT-002 and is documented in FEAT-001. 7. No new TypeScript errors introduced. 8. Vite build succeeds cleanly."
+}
