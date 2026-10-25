@@ -58,7 +58,7 @@ export const FleetOperationsView: React.FC<FleetOperationsViewProps> = ({
       }
     };
     loadStatus();
-    const interval = setInterval(loadStatus, 15000);
+    const interval = setInterval(loadStatus, 4000);
     return () => clearInterval(interval);
   }, [vehicles]);
 
@@ -248,12 +248,16 @@ export const FleetOperationsView: React.FC<FleetOperationsViewProps> = ({
           <span className="text-[10px] text-slate-500 block mt-0.5">Serving passengers</span>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl text-center">
+        <div
+          onClick={() => setSelectedSubTab('movements')}
+          className="bg-slate-900 border border-purple-800/80 hover:border-purple-600 p-4 rounded-xl text-center cursor-pointer transition shadow-sm hover:bg-slate-850"
+          title="Click to view and monitor all active en-route movements"
+        >
           <span className="text-[10px] text-purple-400 font-bold uppercase tracking-wider block mb-1">
-            En Route
+            En Route (In Transit)
           </span>
           <span className="text-xl font-bold text-purple-400">{fleetSummary.enRoute}</span>
-          <span className="text-[10px] text-slate-500 block mt-0.5">Repositioning (Simulated)</span>
+          <span className="text-[10px] text-slate-400 block mt-0.5 font-medium">Repositioning (Simulated) →</span>
         </div>
 
         <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl text-center">
@@ -345,51 +349,77 @@ export const FleetOperationsView: React.FC<FleetOperationsViewProps> = ({
                 <thead className="bg-slate-950 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-800 font-semibold">
                   <tr>
                     <th className="py-2.5 px-4">Vehicle ID</th>
-                    <th className="py-2.5 px-3">Origin Zone</th>
-                    <th className="py-2.5 px-3">Destination Zone</th>
+                    <th className="py-2.5 px-3">Transit Corridor</th>
+                    <th className="py-2.5 px-3">Departure</th>
+                    <th className="py-2.5 px-3">Est. Arrival</th>
+                    <th className="py-2.5 px-3">Elapsed / Remaining</th>
                     <th className="py-2.5 px-3">Progress</th>
-                    <th className="py-2.5 px-3">Estimated Arrival</th>
+                    <th className="py-2.5 px-3">Movement Status</th>
                     <th className="py-2.5 px-3">Recommendation Ref</th>
                     <th className="py-2.5 px-4 text-right">Battery</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/60 font-mono text-[11px]">
-                  {activeMovements.map((v) => (
-                    <tr key={v.id} className="hover:bg-slate-800/40 transition">
-                      <td className="py-2.5 px-4 font-bold text-cyan-400">{v.id}</td>
-                      <td className="py-2.5 px-3 text-slate-200">{v.zoneId}</td>
-                      <td className="py-2.5 px-3 text-purple-300 font-bold flex items-center gap-1.5">
-                        <ArrowRight className="w-3.5 h-3.5 text-purple-400 shrink-0" />
-                        <span>{v.targetZoneName || v.targetZoneId}</span>
-                      </td>
-                      <td className="py-2.5 px-3 font-sans">
-                        <div className="w-32 bg-slate-950 rounded-full h-2 border border-slate-800 overflow-hidden">
-                          <div
-                            className="bg-purple-500 h-2 rounded-full transition-all duration-500"
-                            style={{ width: `${v.movementProgressPct || 25}%` }}
-                          />
-                        </div>
-                        <span className="text-[10px] text-slate-400 font-mono mt-0.5 block">
-                          {v.movementProgressPct || 25}% in transit
-                        </span>
-                      </td>
-                      <td className="py-2.5 px-3 text-slate-300 font-sans text-[11px]">
-                        {v.estimatedArrivalAt
-                          ? new Date(v.estimatedArrivalAt).toLocaleTimeString('en-IN', {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                              timeZone: 'Asia/Kolkata',
-                            })
-                          : 'Within cycle'}
-                      </td>
-                      <td className="py-2.5 px-3 text-slate-400 text-[10px]">
-                        {v.assignedRecommendationId || 'REPOSITION-AUTO'}
-                      </td>
-                      <td className="py-2.5 px-4 text-right font-sans">
-                        <span className="text-emerald-400 font-semibold">{v.batteryOrFuelLevel}%</span>
-                      </td>
-                    </tr>
-                  ))}
+                  {activeMovements.map((v) => {
+                    const progressPct = v.movementProgressPct ?? 10;
+                    return (
+                      <tr key={v.id} className="hover:bg-slate-800/40 transition">
+                        <td className="py-2.5 px-4 font-bold text-cyan-400">{v.id}</td>
+                        <td className="py-2.5 px-3 font-sans font-medium">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-slate-200">{v.zoneId}</span>
+                            <ArrowRight className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                            <span className="text-purple-300 font-bold">{v.targetZoneName || v.targetZoneId}</span>
+                          </div>
+                        </td>
+                        <td className="py-2.5 px-3 text-slate-300 font-sans text-[11px]">
+                          {v.movementStartedAt
+                            ? new Date(v.movementStartedAt).toLocaleTimeString('en-IN', {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                timeZone: 'Asia/Kolkata',
+                              })
+                            : 'Recent'}
+                        </td>
+                        <td className="py-2.5 px-3 text-slate-300 font-sans text-[11px]">
+                          {v.estimatedArrivalAt
+                            ? new Date(v.estimatedArrivalAt).toLocaleTimeString('en-IN', {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                timeZone: 'Asia/Kolkata',
+                              })
+                            : 'Within cycle'}
+                        </td>
+                        <td className="py-2.5 px-3 font-sans text-[11px]">
+                          <span className="text-slate-300">{v.elapsedMinutes !== undefined ? `${v.elapsedMinutes}m el.` : '—'}</span>
+                          {' • '}
+                          <span className="text-cyan-400 font-semibold">{v.remainingMinutes !== undefined ? `${v.remainingMinutes}m left` : '—'}</span>
+                        </td>
+                        <td className="py-2.5 px-3 font-sans">
+                          <div className="w-28 bg-slate-950 rounded-full h-2 border border-slate-800 overflow-hidden">
+                            <div
+                              className="bg-gradient-to-r from-purple-500 to-cyan-500 h-2 rounded-full transition-all duration-300"
+                              style={{ width: `${progressPct}%` }}
+                            />
+                          </div>
+                          <span className="text-[10px] text-purple-300 font-mono mt-0.5 block">
+                            {progressPct}% (Simulated)
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 font-sans">
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-purple-950 text-purple-300 border border-purple-800">
+                            En Route (Simulated)
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 text-slate-400 text-[10px]">
+                          {v.assignedRecommendationId || 'REPOSITION-AUTO'}
+                        </td>
+                        <td className="py-2.5 px-4 text-right font-sans">
+                          <span className="text-emerald-400 font-semibold">{v.batteryOrFuelLevel}%</span>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

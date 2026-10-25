@@ -81,8 +81,8 @@ async function startServer() {
     console.log('[ViziMove AI Auth] VIZIMOVE_API_KEY configured. Protected mutation routes armed.');
   }
 
-  // Seed initial recommendations
-  globalRecommendationEngine.generateRecommendations(globalFleetManager, new Date(), 5);
+  // Seed initial recommendations with autonomous dispatch
+  globalRecommendationEngine.generateRecommendations(globalFleetManager, new Date(), 5, true);
 
   // Seed initial demand forecast run if none exists (Prompt 2 Integration)
   if (!persistentStore.getLatestForecastRun()) {
@@ -95,6 +95,15 @@ async function startServer() {
 
   // Start 15-Minute Operational Pipeline Scheduler
   globalPipelineScheduler.start();
+
+  // Continuous 5-second simulated movement progression ticker for smooth en-route tracking
+  setInterval(() => {
+    try {
+      globalFleetManager.updateDynamicMovementProgress();
+    } catch (e) {
+      console.warn('[ViziMove AI] Movement progression tick error:', e);
+    }
+  }, 5000);
 
   // --- API ROUTERS ---
 
@@ -629,6 +638,7 @@ async function startServer() {
 
   // Fleet
   app.get('/api/fleet', (_req: Request, res: Response) => {
+    globalFleetManager.updateDynamicMovementProgress();
     res.json({
       summary: globalFleetManager.getFleetStateSummary(),
       vehicles: globalFleetManager.getAllVehicles(),
@@ -636,6 +646,7 @@ async function startServer() {
   });
 
   app.get('/api/fleet/summary', (_req: Request, res: Response) => {
+    globalFleetManager.updateDynamicMovementProgress();
     res.json(globalFleetManager.getFleetStateSummary());
   });
 
@@ -706,7 +717,8 @@ async function startServer() {
   app.post('/api/recommendations/generate', requireAuth, (req: Request, res: Response) => {
     const targetTime = req.body.targetTime ? new Date(req.body.targetTime) : new Date();
     const count = req.body.maxCount || 5;
-    const generated = globalRecommendationEngine.generateRecommendations(globalFleetManager, targetTime, count);
+    const autoDispatch = req.body.autoDispatch !== false;
+    const generated = globalRecommendationEngine.generateRecommendations(globalFleetManager, targetTime, count, autoDispatch);
     res.json({
       success: true,
       generatedCount: generated.length,

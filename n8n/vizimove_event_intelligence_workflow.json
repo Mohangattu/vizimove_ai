@@ -24,7 +24,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "http://host.docker.internal:3000/api/events/sources?activeOnly=true",
+        "url": "={{ ($env.VIZIMOVE_BACKEND_URL || 'http://host.docker.internal:3000') + '/api/events/sources?activeOnly=true' }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -34,7 +34,7 @@
             },
             {
               "name": "X-API-Key",
-              "value": "vizimove_secret_api_key_example"
+              "value": "={{ $env.VIZIMOVE_API_KEY || '' }}"
             }
           ]
         },
@@ -339,7 +339,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "http://host.docker.internal:3000/api/events/batch",
+        "url": "={{ ($env.VIZIMOVE_BACKEND_URL || 'http://host.docker.internal:3000') + '/api/events/batch' }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -353,7 +353,7 @@
             },
             {
               "name": "X-API-Key",
-              "value": "vizimove_secret_api_key_example"
+              "value": "={{ $env.VIZIMOVE_API_KEY || '' }}"
             }
           ]
         },
@@ -380,7 +380,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=http://host.docker.internal:3000/api/events/sources/{{ $json.sourceId || $('Normalize & Validate Event Records').item.json.sourceId }}/status",
+        "url": "={{ ($env.VIZIMOVE_BACKEND_URL || 'http://host.docker.internal:3000') + '/api/events/sources/' + ($json.sourceId || $('Normalize & Validate Event Records').item.json.sourceId) + '/status' }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -394,7 +394,7 @@
             },
             {
               "name": "X-API-Key",
-              "value": "vizimove_secret_api_key_example"
+              "value": "={{ $env.VIZIMOVE_API_KEY || '' }}"
             }
           ]
         },
@@ -418,7 +418,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=http://host.docker.internal:3000/api/events/sources/{{ $json.sourceId }}/status",
+        "url": "={{ ($env.VIZIMOVE_BACKEND_URL || 'http://host.docker.internal:3000') + '/api/events/sources/' + $json.sourceId + '/status' }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -432,7 +432,7 @@
             },
             {
               "name": "X-API-Key",
-              "value": "vizimove_secret_api_key_example"
+              "value": "={{ $env.VIZIMOVE_API_KEY || '' }}"
             }
           ]
         },

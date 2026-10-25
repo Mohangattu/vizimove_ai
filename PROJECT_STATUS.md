@@ -64,19 +64,11 @@ The operational pipeline runs on a strict 15-minute scheduled recurrence (`src/l
 
 ## 4. Automated Test Verification Results
 
-All 12 automated unit tests run and pass cleanly (`npm test` / `tsx --test src/lib/algorithms.test.ts`):
-1. `Zone Registry`: Validates all 30 authentic Visakhapatnam zones and metadata.
-2. `Spatial Math`: Haversine distance calculations verified against real-world coordinate pairs.
-3. `Travel Time Estimation`: Dynamic peak vs off-peak urban speed models verified.
-4. `Calibration Coverage`: 100% of zones backed by documented empirical sources.
-5. `Demand Forecasting`: Diurnal weights and evaluation metric math (MAE, RMSE, WAPE) validated.
-6. `Event Intelligence`: Spatial decay equations verified for ACA-VDCA stadium match surge.
-7. `Fleet Simulation`: Vehicle state transitions, dispatching, and reconciliation validated for 1,200 vehicles.
-8. `Supply-Demand`: Service capacity math and shortage severity classification verified.
-9. `Recommendation Engine`: Constraint-aware repositioning and vehicle assignment validated.
-10. `Sub-Hourly 15-Minute Forecasting`: Preserves baseline and event-adjusted demands with intra-hour weighting.
-11. `Event-Zone Spatial Associations`: Haversine distance decay and temporal window logic validated.
-12. `15-Minute Operational Pipeline`: End-to-end execution, freshness checks, and persistence validated.
+All 62 automated tests across unit and integration suites run and pass cleanly (`npm test`):
+- `algorithms.test.ts` (31 unit tests): Zone registry, spatial math, travel time estimation, calibration coverage, demand forecasting, event intelligence, fleet simulation, supply-demand math, recommendation constraints, 15m sub-hourly forecasting, and pipeline scheduling.
+- `auth.test.ts` (16 tests): Timing-safe key comparison, API key validation, session management, CSRF validation, origin verification, and protected endpoint authorization.
+- `autonomousDispatch.test.ts` (10 tests): Eligible dispatch, insufficient surplus, battery constraints, distance limits, travel time limits, duplicate prevention, atomic rollback, cancellation release, simulated arrival, and cycle deduplication.
+- `n8nWorkflow.test.ts` (5 tests): Structural workflow integrity, node connections, execution timeouts, example payload conformance, batch ingestion API, and source status updates.
 
 ---
 
@@ -84,5 +76,6 @@ All 12 automated unit tests run and pass cleanly (`npm test` / `tsx --test src/l
 
 - **TypeScript Compilation:** `npm run lint` (`tsc --noEmit`) passes with 0 errors.
 - **Production Build:** `npm run build` succeeds cleanly.
-- **Unit Tests:** `npm test` runs 12/12 passing tests in ~600ms.
-- **Server Health:** Port 3000 serves all 20 API endpoints and Vite client.
+- **Unit & Integration Tests:** `npm test` runs 62/62 passing tests.
+- **Workflow Validation:** `tests/validate_n8n_workflow.ts` validates 8/8 structural checks.
+- **Server Health:** Port 3000 serves all API endpoints and the Vite client with all systems ONLINE.

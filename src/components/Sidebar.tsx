@@ -3,13 +3,8 @@ import {
   LayoutDashboard,
   TrendingUp,
   Calendar,
-  Car,
   Scale,
   Navigation,
-  Map,
-  Activity,
-  BarChart3,
-  HelpCircle,
 } from 'lucide-react';
 
 export type NavTab =
@@ -50,7 +45,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       icon: <Calendar className="w-4 h-4" />,
       badge: activeEventsCount > 0 ? activeEventsCount : undefined,
     },
-    { id: 'fleet', label: 'Fleet Data', icon: <Car className="w-4 h-4" /> },
     { id: 'supply-demand', label: 'Supply and Demand', icon: <Scale className="w-4 h-4" /> },
     {
       id: 'recommendations',
@@ -58,10 +52,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       icon: <Navigation className="w-4 h-4" />,
       badge: pendingRecsCount > 0 ? pendingRecsCount : undefined,
     },
-    { id: 'demand-map', label: 'Demand Map', icon: <Map className="w-4 h-4" /> },
-    { id: 'model-performance', label: 'Model Performance', icon: <BarChart3 className="w-4 h-4" /> },
-    { id: 'system-health', label: 'System Health', icon: <Activity className="w-4 h-4" /> },
-    { id: 'operations-qa', label: 'Operations Q&A', icon: <HelpCircle className="w-4 h-4" /> },
   ];
 
   const handleSelect = (tab: NavTab) => {

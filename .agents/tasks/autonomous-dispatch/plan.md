@@ -34,7 +34,7 @@
 
 ## Implementation Plan
 
-- [ ] 1. Extend `DriverRecommendation` type in `src/lib/types.ts`
+- [x] 1. Extend `DriverRecommendation` type in `src/lib/types.ts`
 
   **Current:** `DriverRecommendation` has `allocatedVehicleIds`, `status`, `reason` but is missing
   several fields needed for autonomous dispatch tracking.
@@ -51,7 +51,7 @@
   Files: `src/lib/types.ts`
   Verify: `npm run lint` — zero TypeScript errors.
 
-- [ ] 2. Add `autonomousDispatch()` function to `src/lib/fleet.ts`
+- [x] 2. Add `autonomousDispatch()` function to `src/lib/fleet.ts`
 
   **Current:** `fleet.ts` has `assignRepositioning()` (validates + transitions vehicle to EN_ROUTE)
   and `dispatchReposition()` (simpler version without travelTime parameter). No function combines
@@ -97,7 +97,7 @@
   Files: `src/lib/fleet.ts`
   Verify: `npm run lint` — zero TypeScript errors.
 
-- [ ] 3. Wire `autonomousDispatch()` into `pipelineScheduler.ts` Stage 6
+- [x] 3. Wire `autonomousDispatch()` into `pipelineScheduler.ts` Stage 6
 
   **Current:** Stage 6 in `executeCycle()` builds recommendation objects with `status: 'DISPATCHED'`
   and calls `globalFleetManager.assignRepositioning()` in a loop. There is no duplicate-cycle guard
@@ -137,7 +137,7 @@
   Files: `src/lib/pipelineScheduler.ts`
   Verify: `npm run lint` — zero TypeScript errors.
 
-- [ ] 4. Fix `cancelRecommendation()` in `src/lib/recommendations.ts` to release vehicles
+- [x] 4. Fix `cancelRecommendation()` in `src/lib/recommendations.ts` to release vehicles
 
   **Current:** `cancelRecommendation()` only changes status to CANCELLED. Vehicles in EN_ROUTE
   remain stuck indefinitely when a DISPATCHED recommendation is cancelled.
@@ -151,7 +151,7 @@
   Files: `src/lib/recommendations.ts`
   Verify: `npm run lint` — zero TypeScript errors.
 
-- [ ] 5. Add `GET /api/dispatch/status` endpoint and deprecate manual dispatch in `server.ts`
+- [x] 5. Add `GET /api/dispatch/status` endpoint and deprecate manual dispatch in `server.ts`
 
   **Current:** `POST /api/recommendations/:id/dispatch` is the manual approval endpoint. No
   `GET /api/dispatch/status` exists. Cancel endpoint already exists.
@@ -186,7 +186,7 @@
   Files: `server.ts`
   Verify: `npm run lint` — zero TypeScript errors.
 
-- [ ] 6. Update `RecommendationsView.tsx` — remove manual Dispatch button, add autonomous banner
+- [x] 6. Update `RecommendationsView.tsx` — remove manual Dispatch button, add autonomous banner
 
   **Current:** Per-card "Dispatch" button for PENDING recs, `handleDispatch()` function calling
   `api.dispatchRecommendation()`, "pending dispatch" counter in footer. `dispatchAlert` state
@@ -244,7 +244,7 @@
   Verify: `npm run lint` — zero TypeScript errors. Open the Recommendations tab in browser and
   confirm no Dispatch button appears on any PENDING card.
 
-- [ ] 7. Update `OverviewView.tsx` — remove manual dispatch button, add autonomous dispatch status card
+- [x] 7. Update `OverviewView.tsx` — remove manual dispatch button, add autonomous dispatch status card
 
   **Current:** The "Recommended Driver Repositionings" panel has a per-card "Dispatch Repositioning"
   button that calls `onDispatchRec(rec.id)` (which invokes the deprecated manual endpoint). The
@@ -285,7 +285,7 @@
   Files: `src/components/views/OverviewView.tsx`, `src/services/api.ts` (if `getDispatchStatus` not yet added in step 6)
   Verify: `npm run lint` — zero TypeScript errors.
 
-- [ ] 8. Update `FleetOperationsView.tsx` — add "(Simulated)" label to EN_ROUTE entries
+- [x] 8. Update `FleetOperationsView.tsx` — add "(Simulated)" label to EN_ROUTE entries
 
   **Current:** The Assigned Movements table shows EN_ROUTE vehicles with a destination zone,
   progress bar, and ETA. No label indicates this is simulated. The Operational Integrity
@@ -318,7 +318,7 @@
   Files: `src/components/views/FleetOperationsView.tsx`
   Verify: `npm run lint` — zero TypeScript errors.
 
-- [ ] 9. Add `api.getDispatchStatus()` to `src/services/api.ts`
+- [x] 9. Add `api.getDispatchStatus()` to `src/services/api.ts`
 
   **Current:** No `getDispatchStatus` method exists in the API client.
 
@@ -344,7 +344,7 @@
   Files: `src/services/api.ts`
   Verify: `npm run lint` — zero TypeScript errors.
 
-- [ ] 10. Update `store.ts` to support `dispatchedAt` and `dispatchError` in recommendation patches
+- [x] 10. Update `store.ts` to support `dispatchedAt` and `dispatchError` in recommendation patches
 
   **Current:** `updateRecommendationStatus()` in the store only updates `status` and `updatedAt`.
   No method to patch `dispatchedAt` or `dispatchError`.
@@ -369,7 +369,7 @@
   Files: `src/db/store.ts`
   Verify: `npm run lint` — zero TypeScript errors.
 
-- [ ] 11. Write `src/lib/autonomousDispatch.test.ts`
+- [x] 11. Write `src/lib/autonomousDispatch.test.ts`
 
   Write a test file using Node.js built-in test runner (`node:test` / `node:assert`), following the
   exact patterns in `src/lib/algorithms.test.ts` (imports with `.ts` extension, `test()` calls).
@@ -429,7 +429,7 @@
   Verify: `npm run test` — all new tests pass; existing tests in `algorithms.test.ts`,
   `auth.test.ts`, `n8nWorkflow.test.ts` still pass.
 
-- [ ] 12. Run full build and lint; fix any regressions
+- [x] 12. Run full build and lint; fix any regressions
 
   After all code changes are applied:
   1. Run `npm run lint` — fix any TypeScript errors introduced by the new fields or imports.

@@ -293,6 +293,20 @@ export class OperationalPipelineScheduler {
               continue;
             }
 
+            // Aggregate 60-minute operational horizon metrics across the four 15-minute intervals
+            const intervalNames = ['0-15m', '15-30m', '30-45m', '45-60m'];
+            const next4Intervals = (forecastMap[targetZone.id] || []).slice(0, 4);
+            const demand60m = Math.round(next4Intervals.reduce((sum, f) => sum + f.eventAdjustedDemand, 0)) || def.demand15m * 4;
+            let peak15mDemand = def.demand15m;
+            let peak15mInterval = intervalNames[0];
+            next4Intervals.forEach((f, idx) => {
+              if (f.eventAdjustedDemand > peak15mDemand) {
+                peak15mDemand = Math.round(f.eventAdjustedDemand);
+                peak15mInterval = intervalNames[idx];
+              }
+            });
+            const effectiveCapacity60m = Math.round(def.capacity15m * 4 * 10) / 10;
+
             const rec: DriverRecommendation = {
               id: `REC-${cycleId.slice(6)}-${recIndex++}`,
               sourceZoneId: sourceZone.id,
@@ -309,12 +323,16 @@ export class OperationalPipelineScheduler {
               expectedNetTripsServed: Math.round(moveCount * TRIPS_PER_VEHICLE_15M * 10) / 10,
               confidenceScore: 0.91,
               reason: associatedEvt
-                ? `15-Min Cycle: Event surge from ${associatedEvt.eventName} (+${Math.round((associatedEvt.eventLiftMultiplier - 1) * 100)}% lift) causing ${def.deficit} trip deficit.`
-                : `15-Min Cycle: Sub-hourly demand surge (${def.demand15m} trips) exceeds local capacity (${def.capacity15m} trips).`,
+                ? `60-Min Forecast (15m cycle): Event surge from ${associatedEvt.eventName} (+${Math.round((associatedEvt.eventLiftMultiplier - 1) * 100)}% lift) causing ${def.deficit} trip deficit (peak ${peak15mDemand} in ${peak15mInterval}). Dispatched ${moveCount} vehicles from ${sourceZone.name}.`
+                : `60-Min Forecast (15m cycle): Projected demand of ${demand60m} trips exceeds capacity (${effectiveCapacity60m} trips) with sub-hourly deficit of ${def.deficit} in ${targetZone.name}. Dispatched ${moveCount} vehicles from surplus zone ${sourceZone.name}.`,
               supportingData: {
                 sourceSurplus: bestSource.surplus,
                 targetShortage: def.deficit,
-                targetDemand: def.demand15m,
+                targetDemand: demand60m,
+                forecastHorizonMinutes: 60,
+                peak15mDemand,
+                peak15mInterval,
+                effectiveCapacity: effectiveCapacity60m,
                 activeEvent: associatedEvt ? associatedEvt.eventName : undefined,
               },
               createdAt: cycleTimestamp.toISOString(),

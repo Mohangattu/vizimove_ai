@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Activity, ShieldCheck, Clock, MapPin, RefreshCw, Database, Play, CheckCircle2 } from 'lucide-react';
+import { Activity, ShieldCheck, Clock, MapPin, RefreshCw, Play, CheckCircle2 } from 'lucide-react';
 import { SystemHealthStatus } from '../lib/provenance';
 import { OperationsSummary } from '../lib/types';
-import { DatabaseVisibilityModal } from './DatabaseVisibilityModal';
 import { api } from '../services/api';
 
 interface HeaderProps {
@@ -23,7 +22,6 @@ export const Header: React.FC<HeaderProps> = ({
   isMobileMenuOpen,
 }) => {
   const [vizagTime, setVizagTime] = useState<string>('');
-  const [isDbModalOpen, setIsDbModalOpen] = useState<boolean>(false);
   const [isTriggeringCycle, setIsTriggeringCycle] = useState<boolean>(false);
   const [cycleSuccessNotice, setCycleSuccessNotice] = useState<string | null>(null);
 
@@ -128,16 +126,6 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           )}
 
-          {/* PostgreSQL DB Visibility Suite Button */}
-          <button
-            onClick={() => setIsDbModalOpen(true)}
-            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 hover:text-white rounded-lg border border-slate-700 flex items-center gap-1.5 text-xs font-semibold transition cursor-pointer shadow-sm"
-            title="Inspect PostgreSQL Data with pgAdmin / DBeaver / psql"
-          >
-            <Database className="w-3.5 h-3.5 text-cyan-400" />
-            <span>PostgreSQL Inspection & SQL</span>
-          </button>
-
           {/* Refresh Button */}
           <button
             onClick={onRefresh}
@@ -150,12 +138,6 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         </div>
       </header>
-
-      {/* Database Visibility & Inspection Suite Modal */}
-      <DatabaseVisibilityModal
-        isOpen={isDbModalOpen}
-        onClose={() => setIsDbModalOpen(false)}
-      />
     </>
   );
 };

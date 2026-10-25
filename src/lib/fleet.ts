@@ -267,43 +267,38 @@ export class FleetManager {
   }
 
   /**
-   * Retrieves all currently active repositioning movements across the virtual fleet.
+   * Updates real-time dynamic progression for all active EN_ROUTE movements.
+   * Computes elapsed travel time, remaining travel time, and accurate progress percentage.
+   * Verifies arrivals upon elapsed time >= travel duration or target arrival timestamp reached.
+   * Recovers stale (> 45 min) or orphaned movements safely to prevent vehicles from being stuck.
    */
-  public getActiveMovements(): VirtualVehicle[] {
-    return this.getAllVehicles().filter((v) => v.state === 'EN_ROUTE' && v.targetZoneId);
-  }
-
-  /**
-   * Autonomous background progression engine executed on the 15-minute operational schedule.
-   * - Progresses EN_ROUTE vehicles: computes progress %, verifies arrival when elapsed time >= travel duration.
-   * - On verified arrival: updates vehicle.zoneId to targetZoneId, resets state to AVAILABLE, increments reposition count.
-   * - Completes passenger trips for BUSY vehicles, decrements battery/fuel realistically.
-   * - Handles charging transitions for low-battery vehicles.
-   * - Handles expired or stale assignments safely.
-   */
-  public progressAutonomousMovements(nowIso: string = new Date().toISOString()): {
+  public updateDynamicMovementProgress(nowIso: string = new Date().toISOString()): {
     arrivedCount: number;
-    tripsCompletedCount: number;
-    rechargedCount: number;
     activeEnRouteCount: number;
-    timestamp: string;
+    staleRecoveredCount: number;
   } {
     let arrivedCount = 0;
-    let tripsCompletedCount = 0;
-    let rechargedCount = 0;
     let activeEnRouteCount = 0;
-
+    let staleRecoveredCount = 0;
     const nowMs = new Date(nowIso).getTime();
     const all = this.getAllVehicles();
 
     for (const vehicle of all) {
       if (vehicle.state === 'EN_ROUTE') {
-        const startedMs = vehicle.movementStartedAt ? new Date(vehicle.movementStartedAt).getTime() : nowMs - 15 * 60 * 1000;
-        const targetArrivalMs = vehicle.estimatedArrivalAt ? new Date(vehicle.estimatedArrivalAt).getTime() : startedMs + 15 * 60 * 1000;
+        const startedMs = vehicle.movementStartedAt
+          ? new Date(vehicle.movementStartedAt).getTime()
+          : nowMs - 15 * 60 * 1000;
+        const targetArrivalMs = vehicle.estimatedArrivalAt
+          ? new Date(vehicle.estimatedArrivalAt).getTime()
+          : startedMs + 15 * 60 * 1000;
         const totalDuration = Math.max(1, targetArrivalMs - startedMs);
         const elapsed = Math.max(0, nowMs - startedMs);
 
-        if (nowMs >= targetArrivalMs || elapsed >= totalDuration) {
+        // Stale movement guard: if movement has exceeded 45 minutes (max travel time in Vizag is 32m)
+        // or lacks valid targetZoneId, safely complete or recover vehicle to prevent permanent lock
+        const isStale = elapsed > 45 * 60 * 1000;
+
+        if (nowMs >= targetArrivalMs || elapsed >= totalDuration || isStale) {
           // Verified arrival at destination zone!
           const destinationZoneId = vehicle.targetZoneId || vehicle.zoneId;
           const recId = vehicle.assignedRecommendationId;
@@ -324,16 +319,87 @@ export class FleetManager {
           if (recId) {
             persistentStore.updateRecommendationStatus(recId, 'COMPLETED');
           }
+
+          if (isStale) {
+            staleRecoveredCount++;
+          }
           arrivedCount++;
         } else {
-          // In progress: update movement progress percentage
-          const progressPct = Math.min(99, Math.round((elapsed / totalDuration) * 100));
-          persistentStore.updateVehicle(vehicle.id, {
-            movementProgressPct: progressPct,
-          });
+          // In progress: calculate exact dynamic progress percentage (1% to 99%)
+          const progressPct = Math.min(99, Math.max(1, Math.round((elapsed / totalDuration) * 100)));
+          if (vehicle.movementProgressPct !== progressPct) {
+            persistentStore.updateVehicle(vehicle.id, {
+              movementProgressPct: progressPct,
+            });
+          }
           activeEnRouteCount++;
         }
-      } else if (vehicle.state === 'BUSY') {
+      }
+    }
+
+    return { arrivedCount, activeEnRouteCount, staleRecoveredCount };
+  }
+
+  /**
+   * Retrieves all currently active repositioning movements across the virtual fleet.
+   * Dynamically evaluates progress and attaches simulated telemetry (elapsed/remaining minutes).
+   */
+  public getActiveMovements(nowIso: string = new Date().toISOString()): VirtualVehicle[] {
+    // Run real-time dynamic progression update first to ensure fresh state
+    this.updateDynamicMovementProgress(nowIso);
+
+    const nowMs = new Date(nowIso).getTime();
+    const activeVehicles = this.getAllVehicles().filter(
+      (v) => v.state === 'EN_ROUTE' && v.targetZoneId
+    );
+
+    return activeVehicles.map((v) => {
+      const startedMs = v.movementStartedAt
+        ? new Date(v.movementStartedAt).getTime()
+        : nowMs;
+      const arrivalMs = v.estimatedArrivalAt
+        ? new Date(v.estimatedArrivalAt).getTime()
+        : startedMs + 15 * 60 * 1000;
+      const totalDuration = Math.max(1, arrivalMs - startedMs);
+      const elapsed = Math.max(0, nowMs - startedMs);
+      const remainingMs = Math.max(0, arrivalMs - nowMs);
+      const progressPct = Math.min(99, Math.max(1, Math.round((elapsed / totalDuration) * 100)));
+
+      return {
+        ...v,
+        movementProgressPct: v.movementProgressPct ?? progressPct,
+        elapsedMinutes: Math.round((elapsed / 60000) * 10) / 10,
+        remainingMinutes: Math.round((remainingMs / 60000) * 10) / 10,
+        movementStatusLabel: 'En Route (Simulated)',
+      };
+    });
+  }
+
+  /**
+   * Autonomous background progression engine executed on the 15-minute operational schedule.
+   * - Progresses EN_ROUTE vehicles: computes progress %, verifies arrival when elapsed time >= travel duration.
+   * - On verified arrival: updates vehicle.zoneId to targetZoneId, resets state to AVAILABLE, increments reposition count.
+   * - Completes passenger trips for BUSY vehicles, decrements battery/fuel realistically.
+   * - Handles charging transitions for low-battery vehicles.
+   * - Handles expired or stale assignments safely.
+   */
+  public progressAutonomousMovements(nowIso: string = new Date().toISOString()): {
+    arrivedCount: number;
+    tripsCompletedCount: number;
+    rechargedCount: number;
+    activeEnRouteCount: number;
+    timestamp: string;
+  } {
+    // 1. Progress en-route vehicles and handle verified arrivals
+    const movementResult = this.updateDynamicMovementProgress(nowIso);
+    let tripsCompletedCount = 0;
+    let rechargedCount = 0;
+
+    const all = this.getAllVehicles();
+
+    // 2. Handle BUSY passenger trips and OFFLINE charging replenishments
+    for (const vehicle of all) {
+      if (vehicle.state === 'BUSY') {
         // Passenger trip completed in this operational cycle
         persistentStore.updateVehicle(vehicle.id, {
           state: 'AVAILABLE',
@@ -361,10 +427,10 @@ export class FleetManager {
     }
 
     return {
-      arrivedCount,
+      arrivedCount: movementResult.arrivedCount,
       tripsCompletedCount,
       rechargedCount,
-      activeEnRouteCount,
+      activeEnRouteCount: movementResult.activeEnRouteCount,
       timestamp: nowIso,
     };
   }

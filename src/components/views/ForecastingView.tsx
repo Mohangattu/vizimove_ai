@@ -1,895 +1,799 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   TrendingUp,
   Clock,
-  Calendar,
-  BarChart2,
-  Filter,
-  AlertCircle,
-  BarChart3,
-  CheckCircle2,
-  ShieldCheck,
-  Database,
-  Layers,
-  Play,
+  AlertTriangle,
   RefreshCw,
-  FileText,
-  ChevronDown,
-  ChevronUp,
-  Zap,
-  Check,
   Search,
+  Filter,
+  CheckCircle2,
+  Users,
+  Car,
+  ChevronRight,
+  ArrowUpRight,
+  MapPin,
+  Calendar,
+  X,
 } from 'lucide-react';
-import {
-  ForecastRecord,
-  ZoneRecord,
-  ModelEvaluationMetrics,
-  ForecastRunRecord,
-  ZoneDemandPredictionRecord,
-  Genuine15mRequirementAnalysis,
-} from '../../lib/types';
+import { ZoneRecord, SupplyDemandAnalysis } from '../../lib/types';
 import { api } from '../../services/api';
 
 interface ForecastingViewProps {
   zones: ZoneRecord[];
 }
 
+interface IntervalData {
+  index: number;
+  startTime: Date;
+  endTime: Date;
+  timeLabel: string;
+  intervalRange: string;
+  totalDemand: number;
+  baselineDemand: number;
+  eventLift: number;
+  zoneForecasts: Map<string, { eventAdjustedDemand: number; baselineDemand: number }>;
+}
+
 export const ForecastingView: React.FC<ForecastingViewProps> = ({ zones }) => {
-  const [resolution, setResolution] = useState<'hourly' | '15min'>('hourly');
-  const [horizonData, setHorizonData] = useState<{ timestamp: string; forecasts: ForecastRecord[] }[]>([]);
-  const [horizon15mData, setHorizon15mData] = useState<{ timestamp: string; forecasts: any[] }[]>([]);
-  const [selectedZoneId, setSelectedZoneId] = useState<string>('ALL');
-  const [hoursAhead, setHoursAhead] = useState<number>(12);
-  const [intervalsAhead, setIntervalsAhead] = useState<number>(16); // 16 * 15m = 4 hours
-  const [activeTab, setActiveTab] = useState<'forecast' | 'performance' | 'runs'>('forecast');
-  const [metrics, setMetrics] = useState<ModelEvaluationMetrics | null>(null);
-  const [subhourlyMetrics, setSubhourlyMetrics] = useState<any>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [selectedZoneId, setSelectedZoneId] = useState<string>('ALL');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'SHORTAGE' | 'BALANCED_SURPLUS'>('ALL');
+  const [sortBy, setSortBy] = useState<'demand-desc' | 'shortage-desc' | 'name-asc'>('demand-desc');
 
-  // Prompt 2 Integration State
-  const [forecastRuns, setForecastRuns] = useState<ForecastRunRecord[]>([]);
-  const [selectedRunId, setSelectedRunId] = useState<string>('');
-  const [currentRunDetails, setCurrentRunDetails] = useState<{
-    run: ForecastRunRecord;
-    predictions: ZoneDemandPredictionRecord[];
-  } | null>(null);
-  const [gapAnalysis, setGapAnalysis] = useState<Genuine15mRequirementAnalysis | null>(null);
-  const [isExecutingRun, setIsExecutingRun] = useState<boolean>(false);
-  const [execMessage, setExecMessage] = useState<string | null>(null);
-  const [runSearchQuery, setRunSearchQuery] = useState<string>('');
-  const [showGapAnalysisDetails, setShowGapAnalysisDetails] = useState<boolean>(false);
+  // Genuine API data
+  const [raw15mHorizon, setRaw15mHorizon] = useState<{ timestamp: string; forecasts: any[] }[]>([]);
+  const [supplyDemandData, setSupplyDemandData] = useState<SupplyDemandAnalysis[]>([]);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<Date>(new Date());
 
-  const loadForecastRuns = async () => {
+  const loadForecastData = async (showRefreshSpinner: boolean = false) => {
+    if (showRefreshSpinner) setIsRefreshing(true);
+    else setLoading(true);
+
     try {
-      const runs = await api.getForecastRuns(25);
-      setForecastRuns(runs);
-      if (runs.length > 0) {
-        const targetId = selectedRunId || runs[0].runId;
-        setSelectedRunId(targetId);
-        const details = await api.getForecastRunDetails(targetId);
-        setCurrentRunDetails(details);
-      }
-      const gap = await api.get15mGapAnalysis();
-      setGapAnalysis(gap);
+      const [forecast15m, sd] = await Promise.all([
+        api.getForecast15mHorizon(4), // Next 1 hour in four 15-minute intervals
+        api.getSupplyDemand(0, 2.2),  // Real zone supply & demand balances
+      ]);
+      setRaw15mHorizon(forecast15m || []);
+      setSupplyDemandData(sd?.zones || []);
+      setLastRefreshedAt(new Date());
     } catch (err) {
-      console.error('Failed to load forecast runs', err);
-    }
-  };
-
-  useEffect(() => {
-    if (activeTab === 'runs') {
-      loadForecastRuns();
-    }
-  }, [activeTab]);
-
-  const handleSelectRun = async (runId: string) => {
-    setSelectedRunId(runId);
-    try {
-      const details = await api.getForecastRunDetails(runId);
-      setCurrentRunDetails(details);
-    } catch (err) {
-      console.error('Failed to load run details', err);
-    }
-  };
-
-  const handleExecuteRun = async () => {
-    setIsExecutingRun(true);
-    setExecMessage(null);
-    try {
-      const res = await api.executeForecastPipeline(hoursAhead);
-      setExecMessage(`Successfully executed forecast run: ${res.run.runId} (${res.predictionsCount} predictions across 30 zones)`);
-      await loadForecastRuns();
-    } catch (err: any) {
-      setExecMessage(`Run failed: ${err.message}`);
+      console.error('Failed to load forecast data:', err);
     } finally {
-      setIsExecutingRun(false);
+      setLoading(false);
+      setIsRefreshing(false);
     }
   };
 
   useEffect(() => {
-    const fetchForecasts = async () => {
-      setLoading(true);
-      try {
-        const [hourly, subhourly, modelMetrics, subMetrics] = await Promise.all([
-          api.getForecastHorizon(hoursAhead),
-          api.getForecast15mHorizon(intervalsAhead),
-          api.getModelMetrics(),
-          api.getSubhourlyModelMetrics(),
-        ]);
-        setHorizonData(hourly);
-        setHorizon15mData(subhourly);
-        setMetrics(modelMetrics);
-        setSubhourlyMetrics(subMetrics);
-      } catch (err) {
-        console.error('Failed to load forecasts', err);
-      } finally {
-        setLoading(false);
+    loadForecastData();
+    // Auto-refresh forecast every 60 seconds
+    const interval = setInterval(() => {
+      loadForecastData(false);
+    }, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Format 4 distinct 15-minute intervals
+  const intervals: IntervalData[] = useMemo(() => {
+    if (!raw15mHorizon || raw15mHorizon.length === 0) return [];
+
+    return raw15mHorizon.slice(0, 4).map((step, idx) => {
+      const start = new Date(step.timestamp);
+      const end = new Date(start.getTime() + 15 * 60 * 1000);
+
+      const formatTime = (d: Date) =>
+        d.toLocaleTimeString('en-IN', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true,
+          timeZone: 'Asia/Kolkata',
+        });
+
+      const startStr = formatTime(start);
+      const endStr = formatTime(end);
+
+      const zoneForecasts = new Map<string, { eventAdjustedDemand: number; baselineDemand: number }>();
+      let totalDemand = 0;
+      let baselineDemand = 0;
+
+      for (const f of step.forecasts || []) {
+        const d = f.eventAdjustedDemand ?? f.predictedDemand ?? 0;
+        const b = f.baselineDemand ?? f.predictedDemand ?? 0;
+        zoneForecasts.set(f.zoneId, { eventAdjustedDemand: d, baselineDemand: b });
+        totalDemand += d;
+        baselineDemand += b;
       }
-    };
-    fetchForecasts();
-  }, [hoursAhead, intervalsAhead]);
 
-  const rawPoints = resolution === '15min' ? horizon15mData : horizonData;
-
-  const chartPoints = rawPoints.map((step) => {
-    const time = new Date(step.timestamp);
-    const hourLabel = time.toLocaleTimeString('en-IN', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true,
-      timeZone: 'Asia/Kolkata',
-    });
-
-    if (selectedZoneId === 'ALL') {
-      const totalDemand = step.forecasts.reduce((sum: number, f: any) => sum + (f.eventAdjustedDemand || 0), 0);
-      const baseDemand = step.forecasts.reduce((sum: number, f: any) => sum + (f.baselineDemand || f.predictedDemand || 0), 0);
-      const lower = step.forecasts.reduce((sum: number, f: any) => sum + (f.lowerConfidenceBound || 0), 0);
-      const upper = step.forecasts.reduce((sum: number, f: any) => sum + (f.upperConfidenceBound || 0), 0);
-      return { hourLabel, demand: totalDemand, baseDemand, lower, upper };
-    } else {
-      const match = step.forecasts.find((f: any) => f.zoneId === selectedZoneId);
       return {
-        hourLabel,
-        demand: match?.eventAdjustedDemand || 0,
-        baseDemand: match?.baselineDemand || match?.predictedDemand || 0,
-        lower: match?.lowerConfidenceBound || 0,
-        upper: match?.upperConfidenceBound || 0,
+        index: idx + 1,
+        startTime: start,
+        endTime: end,
+        timeLabel: startStr,
+        intervalRange: `${startStr} – ${endStr}`,
+        totalDemand,
+        baselineDemand,
+        eventLift: Math.max(0, totalDemand - baselineDemand),
+        zoneForecasts,
+      };
+    });
+  }, [raw15mHorizon]);
+
+  // Selected Zone summary & intervals
+  const selectedZone = useMemo(() => {
+    if (selectedZoneId === 'ALL') return null;
+    return zones.find((z) => z.id === selectedZoneId) || null;
+  }, [selectedZoneId, zones]);
+
+  // 1-Hour metrics for selected zone or metropolitan total
+  const metrics = useMemo(() => {
+    if (intervals.length === 0) {
+      return {
+        expectedTrips: 0,
+        baselineTrips: 0,
+        eventLiftTrips: 0,
+        busiestInterval: null as IntervalData | null,
+        busiestIntervalDemand: 0,
+        shortageZonesCount: 0,
+        criticalZonesCount: 0,
       };
     }
-  });
 
-  const maxVal = Math.max(...chartPoints.map((p) => p.upper), 50);
+    let expectedTrips = 0;
+    let baselineTrips = 0;
 
-  const featureWeights = [
-    { name: 'Diurnal Hour-of-Day (Sin/Cos Fourier components)', importance: 0.28 },
-    { name: 'Lag 1h Demand Observation (Temporal Autoregressive)', importance: 0.22 },
-    { name: 'Zone Activity Density & Land-Use Calibration', importance: 0.18 },
-    { name: 'Lag 24h Demand (Daily Seasonal Prior)', importance: 0.14 },
-    { name: 'Day of Week & Weekend Commute Multiplier', importance: 0.10 },
-    { name: 'Dynamic Event Lift & Spatial Proximity Decay', importance: 0.08 },
-  ];
+    let maxIntervalDemand = -1;
+    let busiestInterval: IntervalData | null = null;
+
+    intervals.forEach((iv) => {
+      let intervalDemand = 0;
+      let intervalBase = 0;
+
+      if (selectedZoneId === 'ALL') {
+        intervalDemand = iv.totalDemand;
+        intervalBase = iv.baselineDemand;
+      } else {
+        const zForecast = iv.zoneForecasts.get(selectedZoneId);
+        intervalDemand = zForecast?.eventAdjustedDemand || 0;
+        intervalBase = zForecast?.baselineDemand || 0;
+      }
+
+      expectedTrips += intervalDemand;
+      baselineTrips += intervalBase;
+
+      if (intervalDemand > maxIntervalDemand) {
+        maxIntervalDemand = intervalDemand;
+        busiestInterval = iv;
+      }
+    });
+
+    // Zones with potential shortages from supply-demand
+    const shortageZones = supplyDemandData.filter(
+      (z) => z.shortageSeverity === 'CRITICAL' || z.shortageSeverity === 'MODERATE'
+    );
+    const criticalZones = supplyDemandData.filter((z) => z.shortageSeverity === 'CRITICAL');
+
+    return {
+      expectedTrips,
+      baselineTrips,
+      eventLiftTrips: Math.max(0, expectedTrips - baselineTrips),
+      busiestInterval,
+      busiestIntervalDemand: maxIntervalDemand,
+      shortageZonesCount: shortageZones.length,
+      criticalZonesCount: criticalZones.length,
+    };
+  }, [intervals, selectedZoneId, supplyDemandData]);
+
+  // Zone aggregated table data (1-hour forecast + available vehicles + status)
+  const zoneRows = useMemo(() => {
+    const sdMap = new Map<string, SupplyDemandAnalysis>();
+    supplyDemandData.forEach((sd) => sdMap.set(sd.zoneId, sd));
+
+    return zones.map((zone) => {
+      const sd = sdMap.get(zone.id);
+      const availableVehicles = sd?.availableVehicles ?? 0;
+      const severity = sd?.shortageSeverity ?? 'BALANCED';
+      const unmetDemand = sd?.unmetDemand ?? 0;
+      const hourlySupplyCapacity = sd?.hourlySupplyCapacity ?? availableVehicles * 2.2;
+
+      // Sum of predicted demand across the four 15m intervals for this zone
+      let total1hDemand = 0;
+      const intervalValues: number[] = [];
+
+      intervals.forEach((iv) => {
+        const val = iv.zoneForecasts.get(zone.id)?.eventAdjustedDemand || 0;
+        intervalValues.push(val);
+        total1hDemand += val;
+      });
+
+      // If intervals not yet loaded, fall back to eventAdjustedDemand in sd
+      if (total1hDemand === 0 && sd) {
+        total1hDemand = sd.eventAdjustedDemand;
+      }
+
+      return {
+        zoneId: zone.id,
+        zoneName: zone.name,
+        category: zone.category,
+        total1hDemand,
+        avg15mDemand: Math.round(total1hDemand / 4),
+        intervalValues,
+        availableVehicles,
+        hourlySupplyCapacity,
+        unmetDemand,
+        shortageSeverity: severity,
+      };
+    });
+  }, [zones, supplyDemandData, intervals]);
+
+  // Filtered and sorted table rows
+  const filteredZoneRows = useMemo(() => {
+    return zoneRows
+      .filter((row) => {
+        // Status filter
+        if (statusFilter === 'SHORTAGE') {
+          if (row.shortageSeverity !== 'CRITICAL' && row.shortageSeverity !== 'MODERATE') {
+            return false;
+          }
+        } else if (statusFilter === 'BALANCED_SURPLUS') {
+          if (row.shortageSeverity !== 'BALANCED' && row.shortageSeverity !== 'SURPLUS') {
+            return false;
+          }
+        }
+
+        // Search query
+        if (searchQuery.trim()) {
+          const q = searchQuery.toLowerCase().trim();
+          return (
+            row.zoneId.toLowerCase().includes(q) ||
+            row.zoneName.toLowerCase().includes(q) ||
+            row.category.toLowerCase().includes(q)
+          );
+        }
+
+        return true;
+      })
+      .sort((a, b) => {
+        if (sortBy === 'demand-desc') {
+          return b.total1hDemand - a.total1hDemand;
+        }
+        if (sortBy === 'shortage-desc') {
+          // Sort by shortage severity first (CRITICAL > MODERATE > BALANCED > SURPLUS)
+          const weight = { CRITICAL: 3, MODERATE: 2, BALANCED: 1, SURPLUS: 0 };
+          const diff = weight[b.shortageSeverity] - weight[a.shortageSeverity];
+          if (diff !== 0) return diff;
+          return b.unmetDemand - a.unmetDemand;
+        }
+        if (sortBy === 'name-asc') {
+          return a.zoneName.localeCompare(b.zoneName);
+        }
+        return 0;
+      });
+  }, [zoneRows, statusFilter, searchQuery, sortBy]);
+
+  // Chart data points for the 4 intervals
+  const chartPoints = useMemo(() => {
+    return intervals.map((iv) => {
+      let demand = 0;
+      let base = 0;
+
+      if (selectedZoneId === 'ALL') {
+        demand = iv.totalDemand;
+        base = iv.baselineDemand;
+      } else {
+        const zForecast = iv.zoneForecasts.get(selectedZoneId);
+        demand = zForecast?.eventAdjustedDemand || 0;
+        base = zForecast?.baselineDemand || 0;
+      }
+
+      return {
+        index: iv.index,
+        timeLabel: iv.timeLabel,
+        intervalRange: iv.intervalRange,
+        demand,
+        base,
+        eventLift: Math.max(0, demand - base),
+      };
+    });
+  }, [intervals, selectedZoneId]);
+
+  const maxChartVal = useMemo(() => {
+    const vals = chartPoints.map((p) => p.demand);
+    return Math.max(...vals, 10);
+  }, [chartPoints]);
 
   return (
     <div className="space-y-6">
-      {/* Top Controller Bar */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-wrap items-center justify-between gap-4">
+      {/* Header & Operational Scope Bar */}
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-base font-bold text-white flex items-center gap-2">
-            <TrendingUp className="w-4 h-4 text-cyan-400" />
-            Demand Forecasting & Model Validation Engine
-          </h2>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Predictions Across 30 Zones • XGBoost Diurnal Curves • 15-Min Sub-Hourly Operational Models
-          </p>
+          <div className="flex items-center gap-2">
+            <span className="p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
+              <TrendingUp className="w-5 h-5" />
+            </span>
+            <div>
+              <h2 className="text-lg font-bold text-white tracking-tight">Demand Forecast</h2>
+              <p className="text-xs text-slate-400">
+                Next 1-Hour Passenger Trip Predictions Across Four 15-Minute Operational Intervals
+              </p>
+            </div>
+          </div>
         </div>
 
-        {/* Section Tabs */}
-        <div className="flex items-center space-x-1 bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs">
+        {/* Zone Selector & Controls */}
+        <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex items-center space-x-2 bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-800 text-xs">
+            <MapPin className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+            <select
+              value={selectedZoneId}
+              onChange={(e) => setSelectedZoneId(e.target.value)}
+              className="bg-transparent text-white font-medium focus:outline-none cursor-pointer max-w-[200px] md:max-w-[260px] truncate"
+            >
+              <option value="ALL" className="bg-slate-900 text-white">
+                All Zones (Metropolitan Total)
+              </option>
+              {zones.map((z) => (
+                <option key={z.id} value={z.id} className="bg-slate-900 text-white">
+                  {z.id} — {z.name}
+                </option>
+              ))}
+            </select>
+            {selectedZoneId !== 'ALL' && (
+              <button
+                onClick={() => setSelectedZoneId('ALL')}
+                title="Reset to All Zones"
+                className="text-slate-400 hover:text-white transition ml-1 p-0.5 rounded cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
           <button
-            onClick={() => setActiveTab('forecast')}
-            className={`px-3 py-1.5 rounded-md font-medium transition cursor-pointer ${
-              activeTab === 'forecast' ? 'bg-cyan-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
-            }`}
+            onClick={() => loadForecastData(true)}
+            disabled={isRefreshing}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-950 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white rounded-lg text-xs font-medium transition cursor-pointer"
+            title="Refresh 15-minute operational forecasts"
           >
-            Demand Horizon
-          </button>
-          <button
-            onClick={() => setActiveTab('performance')}
-            className={`px-3 py-1.5 rounded-md font-medium transition cursor-pointer ${
-              activeTab === 'performance' ? 'bg-cyan-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            Model Performance & Validation
-          </button>
-          <button
-            onClick={() => setActiveTab('runs')}
-            className={`px-3 py-1.5 rounded-md font-medium transition cursor-pointer flex items-center gap-1.5 ${
-              activeTab === 'runs' ? 'bg-cyan-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <Database className="w-3.5 h-3.5" />
-            <span>Zone Forecast Runs (Prompt 2)</span>
+            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-cyan-400' : ''}`} />
+            <span>{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
           </button>
         </div>
       </div>
 
-      {activeTab === 'forecast' ? (
-        <>
-          {/* Resolution & Filter Bar */}
-          <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 text-xs">
-            <div className="flex items-center space-x-2">
-              <label className="text-slate-400 font-semibold">Select Zone:</label>
-              <select
-                value={selectedZoneId}
-                onChange={(e) => setSelectedZoneId(e.target.value)}
-                className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-white font-medium focus:border-cyan-500 focus:outline-none"
+      {/* Selected Zone Pill Indicator */}
+      {selectedZone && (
+        <div className="bg-cyan-950/40 border border-cyan-800/40 rounded-lg px-4 py-2 flex items-center justify-between text-xs">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+            <span className="text-slate-400">Filtering forecast to:</span>
+            <span className="font-bold text-white font-mono">{selectedZone.id}</span>
+            <span className="text-cyan-300 font-semibold">{selectedZone.name}</span>
+            <span className="text-[10px] px-2 py-0.5 rounded bg-cyan-900/60 text-cyan-200 border border-cyan-700/50">
+              {selectedZone.category}
+            </span>
+          </div>
+          <button
+            onClick={() => setSelectedZoneId('ALL')}
+            className="text-cyan-400 hover:text-cyan-200 text-xs font-semibold flex items-center gap-1 cursor-pointer"
+          >
+            Show All 30 Zones
+          </button>
+        </div>
+      )}
+
+      {/* 3 Key Metrics Cards (Requirement 2) */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Metric 1: Expected Passenger Trips */}
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm relative overflow-hidden">
+          <div className="flex items-center justify-between text-slate-400 mb-2">
+            <span className="text-xs font-semibold uppercase tracking-wider">Expected Passenger Trips</span>
+            <Users className="w-4 h-4 text-cyan-400" />
+          </div>
+          <div className="flex items-baseline gap-2 mb-1">
+            <span className="text-3xl font-extrabold text-white tracking-tight font-mono">
+              {loading ? '...' : metrics.expectedTrips.toLocaleString()}
+            </span>
+            <span className="text-xs text-slate-400">trips / next 1h</span>
+          </div>
+          <div className="flex items-center justify-between text-[11px] text-slate-400 mt-2 pt-2 border-t border-slate-800/80">
+            <span>
+              {selectedZoneId === 'ALL' ? 'Across 30 GVMC zones' : 'In selected zone'}
+            </span>
+            {metrics.eventLiftTrips > 0 ? (
+              <span className="text-cyan-400 font-medium font-mono">
+                +{metrics.eventLiftTrips} event lift
+              </span>
+            ) : (
+              <span className="text-slate-500 font-mono">Base diurnal curve</span>
+            )}
+          </div>
+        </div>
+
+        {/* Metric 2: Busiest 15-Minute Interval */}
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm relative overflow-hidden">
+          <div className="flex items-center justify-between text-slate-400 mb-2">
+            <span className="text-xs font-semibold uppercase tracking-wider">Busiest 15-Minute Interval</span>
+            <Clock className="w-4 h-4 text-amber-400" />
+          </div>
+          <div className="flex items-baseline gap-2 mb-1">
+            <span className="text-2xl font-extrabold text-amber-300 tracking-tight">
+              {loading || !metrics.busiestInterval ? '...' : metrics.busiestInterval.intervalRange}
+            </span>
+          </div>
+          <div className="flex items-center justify-between text-[11px] text-slate-400 mt-2 pt-2 border-t border-slate-800/80">
+            <span>Peak quarter-hour volume:</span>
+            <span className="text-amber-300 font-semibold font-mono">
+              {loading ? '...' : `${metrics.busiestIntervalDemand} trips`}
+              {metrics.expectedTrips > 0 &&
+                ` (${Math.round((metrics.busiestIntervalDemand / metrics.expectedTrips) * 100)}%)`}
+            </span>
+          </div>
+        </div>
+
+        {/* Metric 3: Zones with Potential Shortages */}
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm relative overflow-hidden">
+          <div className="flex items-center justify-between text-slate-400 mb-2">
+            <span className="text-xs font-semibold uppercase tracking-wider">Zones with Potential Shortages</span>
+            <AlertTriangle className="w-4 h-4 text-red-400" />
+          </div>
+          <div className="flex items-baseline gap-2 mb-1">
+            <span
+              className={`text-3xl font-extrabold font-mono ${
+                metrics.shortageZonesCount > 0 ? 'text-red-400' : 'text-emerald-400'
+              }`}
+            >
+              {loading ? '...' : metrics.shortageZonesCount}
+            </span>
+            <span className="text-xs text-slate-400">
+              {metrics.shortageZonesCount === 1 ? 'zone needs fleet' : 'zones need fleet'}
+            </span>
+          </div>
+          <div className="flex items-center justify-between text-[11px] text-slate-400 mt-2 pt-2 border-t border-slate-800/80">
+            <span>
+              {metrics.criticalZonesCount > 0 ? (
+                <span className="text-red-400 font-medium">
+                  {metrics.criticalZonesCount} critical shortage
+                </span>
+              ) : (
+                <span className="text-slate-400">Demand exceeds local vehicles</span>
+              )}
+            </span>
+            <button
+              onClick={() => {
+                setStatusFilter('SHORTAGE');
+                const tableElem = document.getElementById('forecast-zones-table');
+                tableElem?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="text-cyan-400 hover:text-cyan-300 font-medium flex items-center gap-0.5 cursor-pointer"
+            >
+              <span>View in table</span>
+              <ChevronRight className="w-3 h-3" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Demand Chart for Next 60 Minutes (Requirement 3) */}
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 pb-3 border-b border-slate-800/80">
+          <div>
+            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+              <Clock className="w-4 h-4 text-cyan-400" />
+              Next 60-Minute Demand Forecast by 15-Minute Intervals
+            </h3>
+            <p className="text-xs text-slate-400 mt-0.5">
+              {selectedZoneId === 'ALL'
+                ? 'Citywide trip volume across four upcoming quarter-hour windows'
+                : `Predicted trips for ${selectedZone?.name || selectedZoneId} across four upcoming quarter-hour windows`}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-4 text-xs">
+            <div className="flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded-sm bg-gradient-to-t from-cyan-600 to-cyan-400" />
+              <span className="text-slate-300">Predicted Demand</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
+              <span className="text-slate-400">Peak Interval</span>
+            </div>
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="h-56 flex items-center justify-center text-xs text-slate-400">
+            <RefreshCw className="w-5 h-5 animate-spin text-cyan-400 mr-2" />
+            Loading 15-minute forecast intervals...
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 pt-2">
+            {chartPoints.map((pt, idx) => {
+              const isPeak = pt.demand === metrics.busiestIntervalDemand && pt.demand > 0;
+              const fillPct = maxChartVal > 0 ? Math.max(12, Math.round((pt.demand / maxChartVal) * 100)) : 20;
+
+              return (
+                <div
+                  key={idx}
+                  className={`bg-slate-950/70 border rounded-xl p-4 flex flex-col justify-between transition relative overflow-hidden ${
+                    isPeak
+                      ? 'border-amber-500/50 shadow-sm shadow-amber-500/10'
+                      : 'border-slate-800 hover:border-slate-700'
+                  }`}
+                >
+                  {/* Peak Tag */}
+                  {isPeak && (
+                    <span className="absolute top-2 right-2 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 uppercase tracking-wider">
+                      Busiest
+                    </span>
+                  )}
+
+                  <div>
+                    <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
+                      <span className="font-semibold text-slate-300">Interval {pt.index}</span>
+                      <span className="text-[11px] font-mono text-slate-500">
+                        {idx === 0 && '0–15 min'}
+                        {idx === 1 && '15–30 min'}
+                        {idx === 2 && '30–45 min'}
+                        {idx === 3 && '45–60 min'}
+                      </span>
+                    </div>
+
+                    <div className="text-xs font-mono font-bold text-cyan-300 mb-3">
+                      {pt.intervalRange}
+                    </div>
+
+                    <div className="flex items-baseline gap-1.5 mb-2">
+                      <span className="text-2xl font-bold font-mono text-white">
+                        {pt.demand.toLocaleString()}
+                      </span>
+                      <span className="text-xs text-slate-400">trips</span>
+                    </div>
+                  </div>
+
+                  {/* Visual Bar representation */}
+                  <div className="space-y-1.5 mt-2">
+                    <div className="w-full bg-slate-900 rounded-full h-2.5 overflow-hidden border border-slate-800">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${
+                          isPeak
+                            ? 'bg-gradient-to-r from-amber-500 to-amber-300'
+                            : 'bg-gradient-to-r from-cyan-600 to-cyan-400'
+                        }`}
+                        style={{ width: `${fillPct}%` }}
+                      />
+                    </div>
+                    <div className="flex justify-between items-center text-[10px] text-slate-500 font-mono">
+                      <span>{pt.timeLabel}</span>
+                      {pt.eventLift > 0 ? (
+                        <span className="text-cyan-400 font-medium">+{pt.eventLift} event</span>
+                      ) : (
+                        <span>Base rate</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Compact Zone Demand Table (Requirement 4) */}
+      <div id="forecast-zones-table" className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
+        {/* Table Controls Bar */}
+        <div className="p-4 border-b border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+              <Car className="w-4 h-4 text-cyan-400" />
+              Zone Demand, Vehicle Supply & Balance Overview
+            </h3>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Predicted passenger demand for the next hour matched with current available fleet across 30 zones
+            </p>
+          </div>
+
+          {/* Quick Filters & Search */}
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            {/* Status Filter Chips */}
+            <div className="flex items-center bg-slate-950 p-1 rounded-lg border border-slate-800">
+              <button
+                onClick={() => setStatusFilter('ALL')}
+                className={`px-2.5 py-1 rounded font-medium transition cursor-pointer text-xs ${
+                  statusFilter === 'ALL'
+                    ? 'bg-cyan-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-white'
+                }`}
               >
-                <option value="ALL">Entire Visakhapatnam (30 Zones Metropolitan Total)</option>
-                {zones.map((z) => (
-                  <option key={z.id} value={z.id}>
-                    {z.id} — {z.name}
-                  </option>
-                ))}
+                All ({zoneRows.length})
+              </button>
+              <button
+                onClick={() => setStatusFilter('SHORTAGE')}
+                className={`px-2.5 py-1 rounded font-medium transition cursor-pointer text-xs flex items-center gap-1 ${
+                  statusFilter === 'SHORTAGE'
+                    ? 'bg-red-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-red-400'
+                }`}
+              >
+                <AlertTriangle className="w-3 h-3" />
+                Shortages ({metrics.shortageZonesCount})
+              </button>
+              <button
+                onClick={() => setStatusFilter('BALANCED_SURPLUS')}
+                className={`px-2.5 py-1 rounded font-medium transition cursor-pointer text-xs ${
+                  statusFilter === 'BALANCED_SURPLUS'
+                    ? 'bg-emerald-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-emerald-400'
+                }`}
+              >
+                Balanced / Surplus
+              </button>
+            </div>
+
+            {/* Sort Selector */}
+            <div className="flex items-center gap-1.5 bg-slate-950 px-2.5 py-1.5 rounded-lg border border-slate-800 text-xs">
+              <span className="text-slate-500">Sort:</span>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as any)}
+                className="bg-transparent text-slate-200 font-medium focus:outline-none cursor-pointer"
+              >
+                <option value="demand-desc" className="bg-slate-900 text-white">Highest Demand</option>
+                <option value="shortage-desc" className="bg-slate-900 text-white">Shortage Severity</option>
+                <option value="name-asc" className="bg-slate-900 text-white">Zone Name</option>
               </select>
             </div>
 
-            {/* Resolution Toggle */}
-            <div className="flex items-center space-x-2">
-              <span className="text-slate-400 font-semibold">Model Resolution:</span>
-              <div className="flex items-center bg-slate-950 p-1 rounded-lg border border-slate-800">
-                <button
-                  onClick={() => setResolution('hourly')}
-                  className={`px-3 py-1 rounded font-medium transition cursor-pointer text-xs ${
-                    resolution === 'hourly'
-                      ? 'bg-cyan-600 text-white font-semibold shadow-sm'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  Hourly (12h)
-                </button>
-                <button
-                  onClick={() => setResolution('15min')}
-                  className={`px-3 py-1 rounded font-medium transition cursor-pointer text-xs ${
-                    resolution === '15min'
-                      ? 'bg-cyan-600 text-white font-semibold shadow-sm'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  15-Minute Operational (4h)
-                </button>
-              </div>
+            {/* Search Input */}
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-500" />
+              <input
+                type="text"
+                placeholder="Search zone..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-8 pr-3 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 w-44"
+              />
             </div>
+          </div>
+        </div>
 
-            <div className="flex items-center space-x-1 bg-slate-950 p-1 rounded-lg border border-slate-800">
-              <span className="text-slate-400 px-2 text-[11px] font-semibold">Horizon:</span>
-              {resolution === 'hourly' ? (
-                [6, 12, 24, 48].map((h) => (
-                  <button
-                    key={h}
-                    onClick={() => setHoursAhead(h)}
-                    className={`px-2.5 py-1 rounded font-medium transition cursor-pointer text-[11px] ${
-                      hoursAhead === h ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    {h}h
-                  </button>
-                ))
+        {/* Table Body */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-slate-950/70 text-slate-400 uppercase font-semibold text-[10px] tracking-wider border-b border-slate-800">
+              <tr>
+                <th className="py-3 px-4">Zone Name & ID</th>
+                <th className="py-3 px-4 text-right">Predicted Demand (Next 1h)</th>
+                <th className="py-3 px-4 text-right">Available Vehicles</th>
+                <th className="py-3 px-4 text-center">Demand Status</th>
+                <th className="py-3 px-4 text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800/60 font-sans">
+              {loading ? (
+                <tr>
+                  <td colSpan={5} className="py-12 text-center text-slate-400 text-xs">
+                    <RefreshCw className="w-5 h-5 animate-spin mx-auto text-cyan-400 mb-2" />
+                    Loading zone forecasts and fleet telemetry...
+                  </td>
+                </tr>
+              ) : filteredZoneRows.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="py-8 text-center text-slate-400 text-xs">
+                    No zones matching the selected filters.
+                  </td>
+                </tr>
               ) : (
-                [8, 16, 24, 32].map((iv) => (
-                  <button
-                    key={iv}
-                    onClick={() => setIntervalsAhead(iv)}
-                    className={`px-2.5 py-1 rounded font-medium transition cursor-pointer text-[11px] ${
-                      intervalsAhead === iv ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    {iv * 15 / 60}h ({iv}x15m)
-                  </button>
-                ))
-              )}
-            </div>
-          </div>
+                filteredZoneRows.map((row) => {
+                  const isSelected = selectedZoneId === row.zoneId;
 
-          {/* Sub-Hourly Operational Model Banner */}
-          {resolution === '15min' && (
-            <div className="bg-cyan-950/40 border border-cyan-800/40 rounded-xl p-4 flex flex-wrap items-center justify-between gap-4 text-xs">
-              <div>
-                <span className="font-bold text-cyan-300 block text-xs">
-                  15-Minute Sub-Hourly Model Active ({subhourlyMetrics?.version || 'v2.4.2-subhourly-15min'})
-                </span>
-                <p className="text-slate-300 text-[11px] mt-0.5">
-                  Distributes demand across :00, :15, :30, and :45 quarter-hour buckets while strictly preserving baseline vs event-adjusted demand.
-                </p>
-              </div>
-              <div className="flex items-center gap-3 font-mono text-[11px]">
-                <span className="bg-slate-900 px-2.5 py-1 rounded border border-slate-700 text-slate-300">
-                  MAE: <strong className="text-white">{subhourlyMetrics?.mae || 1.35} trips/15m</strong>
-                </span>
-                <span className="bg-slate-900 px-2.5 py-1 rounded border border-slate-700 text-slate-300">
-                  WAPE: <strong className="text-emerald-400">12.8%</strong>
-                </span>
-                <span className="bg-slate-900 px-2.5 py-1 rounded border border-slate-700 text-slate-300">
-                  R²: <strong className="text-cyan-400">0.892</strong>
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* Time Series Chart */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
-            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-              <div>
-                <h3 className="text-sm font-bold text-white">
-                  {selectedZoneId === 'ALL'
-                    ? resolution === '15min'
-                      ? 'Metropolitan 15-Minute Operational Demand Forecast (Trips / 15-Min Interval)'
-                      : 'Metropolitan Hourly Demand Forecast (Trips / Hour)'
-                    : resolution === '15min'
-                    ? `${zones.find((z) => z.id === selectedZoneId)?.name} 15-Minute Forecast`
-                    : `${zones.find((z) => z.id === selectedZoneId)?.name} Hourly Forecast`}
-                </h3>
-                <p className="text-xs text-slate-400">
-                  Shaded envelope represents ±12% to ±22% model confidence intervals
-                </p>
-              </div>
-
-              <div className="flex items-center gap-4 text-xs">
-                <div className="flex items-center gap-1.5">
-                  <span className="w-3 h-0.5 bg-cyan-400" />
-                  <span className="text-slate-300">Event-Adjusted</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="w-3 h-0.5 bg-slate-500 border-t border-dashed" />
-                  <span className="text-slate-400">Base Diurnal</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="w-3 h-3 bg-cyan-500/20 border border-cyan-500/40 rounded-sm" />
-                  <span className="text-slate-400">Confidence Band</span>
-                </div>
-              </div>
-            </div>
-
-            {loading ? (
-              <div className="h-64 flex items-center justify-center text-xs text-slate-400">
-                Calculating time-series features...
-              </div>
-            ) : (
-              <div className="w-full overflow-x-auto">
-                <div className="min-w-[650px] h-64 relative flex flex-col justify-between">
-                  <svg className="w-full h-full overflow-visible" viewBox="0 0 700 200">
-                    {[0, 0.25, 0.5, 0.75, 1.0].map((frac, i) => {
-                      const y = 180 - frac * 160;
-                      const labelVal = Math.round(frac * maxVal);
-                      return (
-                        <g key={i}>
-                          <line x1="40" y1={y} x2="680" y2={y} stroke="#1e293b" strokeDasharray="2,2" />
-                          <text x="35" y={y + 3} textAnchor="end" fill="#64748b" fontSize="9">
-                            {labelVal}
-                          </text>
-                        </g>
-                      );
-                    })}
-
-                    {chartPoints.length > 1 && (
-                      <polygon
-                        points={[
-                          ...chartPoints.map((p, idx) => {
-                            const x = 50 + (idx / (chartPoints.length - 1)) * 620;
-                            const y = 180 - (p.upper / maxVal) * 160;
-                            return `${x},${y}`;
-                          }),
-                          ...[...chartPoints].reverse().map((p, idx) => {
-                            const originalIdx = chartPoints.length - 1 - idx;
-                            const x = 50 + (originalIdx / (chartPoints.length - 1)) * 620;
-                            const y = 180 - (p.lower / maxVal) * 160;
-                            return `${x},${y}`;
-                          }),
-                        ].join(' ')}
-                        fill="rgba(6, 182, 212, 0.15)"
-                        stroke="none"
-                      />
-                    )}
-
-                    {chartPoints.length > 1 && (
-                      <polyline
-                        points={chartPoints
-                          .map((p, idx) => {
-                            const x = 50 + (idx / (chartPoints.length - 1)) * 620;
-                            const y = 180 - (p.baseDemand / maxVal) * 160;
-                            return `${x},${y}`;
-                          })
-                          .join(' ')}
-                        fill="none"
-                        stroke="#64748b"
-                        strokeWidth="1.5"
-                        strokeDasharray="4,4"
-                      />
-                    )}
-
-                    {chartPoints.length > 1 && (
-                      <polyline
-                        points={chartPoints
-                          .map((p, idx) => {
-                            const x = 50 + (idx / (chartPoints.length - 1)) * 620;
-                            const y = 180 - (p.demand / maxVal) * 160;
-                            return `${x},${y}`;
-                          })
-                          .join(' ')}
-                        fill="none"
-                        stroke="#38bdf8"
-                        strokeWidth="2.5"
-                      />
-                    )}
-
-                    {chartPoints.map((p, idx) => {
-                      const x = 50 + (idx / (chartPoints.length - 1)) * 620;
-                      const y = 180 - (p.demand / maxVal) * 160;
-                      return (
-                        <g key={idx}>
-                          <circle cx={x} cy={y} r="3.5" fill="#0284c7" stroke="#ffffff" strokeWidth="1.5" />
-                          <text x={x} y="196" textAnchor="middle" fill="#94a3b8" fontSize="9">
-                            {p.hourLabel.split(' ')[0]}
-                          </text>
-                        </g>
-                      );
-                    })}
-                  </svg>
-                </div>
-              </div>
-            )}
-          </div>
-        </>
-      ) : activeTab === 'performance' ? (
-        /* Model Performance View Embedded Inside Demand Forecast */
-        metrics ? (
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-                <span className="text-slate-400 text-xs font-bold uppercase tracking-wider block mb-1">
-                  Mean Absolute Error (MAE)
-                </span>
-                <div className="text-2xl font-bold text-white mb-1">
-                  {metrics.mae} <span className="text-xs font-normal text-slate-400">trips / hr</span>
-                </div>
-                <p className="text-[11px] text-slate-400">
-                  Average prediction deviation per zone-hour
-                </p>
-              </div>
-
-              <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-                <span className="text-slate-400 text-xs font-bold uppercase tracking-wider block mb-1">
-                  Root Mean Squared Error (RMSE)
-                </span>
-                <div className="text-2xl font-bold text-white mb-1">
-                  {metrics.rmse} <span className="text-xs font-normal text-slate-400">trips / hr</span>
-                </div>
-                <p className="text-[11px] text-slate-400">
-                  Penalizes large spike prediction outliers
-                </p>
-              </div>
-
-              <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-                <span className="text-slate-400 text-xs font-bold uppercase tracking-wider block mb-1">
-                  Weighted Error (WAPE)
-                </span>
-                <div className="text-2xl font-bold text-emerald-400 mb-1">
-                  {Math.round(metrics.wape * 1000) / 10}%
-                </div>
-                <p className="text-[11px] text-slate-400">
-                  Safe for near-zero hourly trip observations
-                </p>
-              </div>
-
-              <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-                <span className="text-slate-400 text-xs font-bold uppercase tracking-wider block mb-1">
-                  Baseline Reduction
-                </span>
-                <div className="text-2xl font-bold text-cyan-400 mb-1">
-                  -42.4% <span className="text-xs font-normal text-slate-400">vs Naive</span>
-                </div>
-                <p className="text-[11px] text-slate-400">
-                  Seasonal Naive (t-24h) WAPE: {Math.round(metrics.baselineWape * 1000) / 10}%
-                </p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-                <h3 className="text-sm font-bold text-white mb-4">
-                  Feature Importance (Gain Metric)
-                </h3>
-                <div className="space-y-4 text-xs">
-                  {featureWeights.map((feat, idx) => (
-                    <div key={idx}>
-                      <div className="flex justify-between text-slate-300 mb-1">
-                        <span className="font-medium truncate max-w-sm">{feat.name}</span>
-                        <span className="font-mono text-cyan-400 font-bold">{Math.round(feat.importance * 100)}%</span>
-                      </div>
-                      <div className="w-full bg-slate-950 rounded-full h-2 overflow-hidden border border-slate-800">
-                        <div
-                          className="bg-cyan-500 h-2 rounded-full"
-                          style={{ width: `${feat.importance * 100}%` }}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col justify-between">
-                <div>
-                  <h3 className="text-sm font-bold text-white mb-3">
-                    Chronological Time-Series Validation Protocol
-                  </h3>
-                  <div className="text-xs text-slate-300 space-y-2.5 leading-relaxed">
-                    <p>
-                      <strong>No Temporal Leakage:</strong> Conventional random k-fold cross-validation is strictly avoided
-                      as it leaks future temporal correlation into the past. Chronological expanding-window validation was employed.
-                    </p>
-                    <p>
-                      <strong>Dataset Partitions:</strong> Trained across{' '}
-                      <strong className="text-white">{metrics.trainingObservations.toLocaleString()}</strong> hourly zone observations
-                      and evaluated against <strong className="text-white">{metrics.testObservations.toLocaleString()}</strong> out-of-sample test hours.
-                    </p>
-                    <p>
-                      <strong>Metric Selection Rationale:</strong> Standard MAPE produces division-by-zero or distorted
-                      infinite penalties during early-morning periods when actual demand is 1-3 trips. WAPE is used as the primary
-                      objective metric.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-4 pt-3 border-t border-slate-800 text-[11px] text-slate-400 flex justify-between">
-                  <span>Model Engine: XGBoost Regressor ({metrics.version})</span>
-                  <span className="text-emerald-400">Validated Chronologically</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        ) : null
-      ) : (
-        /* activeTab === 'runs': Prompt 2 Demand Forecasting & Zone Integration View */
-          <div className="space-y-6">
-            {/* Header Banner & Model Provenance Disclosure */}
-            <div className="bg-gradient-to-r from-slate-900 via-cyan-950/40 to-slate-900 border border-cyan-800/40 rounded-xl p-5 shadow-lg">
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <div>
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <span className="px-2.5 py-0.5 rounded text-[10px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
-                      PROMPT 2 INTEGRATION
-                    </span>
-                    <span className="px-2.5 py-0.5 rounded text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                      TEMPORAL RESOLUTION: HOURLY (60-MIN)
-                    </span>
-                    <span className="px-2.5 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                      IDEMPOTENT PERSISTENCE: ON
-                    </span>
-                  </div>
-                  <h3 className="text-base font-bold text-white flex items-center gap-2">
-                    <Database className="w-5 h-5 text-cyan-400" />
-                    PostgreSQL Demand Forecast Runs & Zone Integration
-                  </h3>
-                  <p className="text-xs text-slate-300 mt-1 max-w-3xl leading-relaxed">
-                    Evaluates all 30 Visakhapatnam metropolitan zones with strict distinction between the original uncalibrated model prediction
-                    and the geographically calibrated prediction. Pure demand model with zero event-based multipliers.
-                  </p>
-                </div>
-
-                {/* Execution Controller */}
-                <div className="flex items-center gap-2 bg-slate-950 p-2 rounded-xl border border-slate-800">
-                  <div className="flex items-center gap-1.5 text-xs text-slate-400 font-semibold px-2">
-                    <span>Horizon:</span>
-                    <select
-                      value={hoursAhead}
-                      onChange={(e) => setHoursAhead(parseInt(e.target.value, 10))}
-                      className="bg-slate-900 border border-slate-700 text-white rounded px-2 py-1 text-xs focus:outline-none"
+                  return (
+                    <tr
+                      key={row.zoneId}
+                      onClick={() => setSelectedZoneId(isSelected ? 'ALL' : row.zoneId)}
+                      className={`hover:bg-slate-800/50 transition cursor-pointer ${
+                        isSelected ? 'bg-cyan-950/30 border-l-2 border-l-cyan-400' : ''
+                      }`}
                     >
-                      <option value="6">6 Hours</option>
-                      <option value="12">12 Hours</option>
-                      <option value="24">24 Hours</option>
-                      <option value="48">48 Hours</option>
-                    </select>
-                  </div>
-                  <button
-                    onClick={handleExecuteRun}
-                    disabled={isExecutingRun}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white rounded-lg text-xs font-semibold shadow-md transition cursor-pointer"
-                  >
-                    {isExecutingRun ? (
-                      <>
-                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                        <span>Executing...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Play className="w-3.5 h-3.5 fill-current" />
-                        <span>Execute Forecast Run</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
+                      {/* Zone Name */}
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-cyan-400 font-bold text-xs">
+                            {row.zoneId}
+                          </span>
+                          <div>
+                            <span className="font-semibold text-white block">
+                              {row.zoneName}
+                            </span>
+                            <span className="text-[10px] text-slate-400">
+                              {row.category}
+                            </span>
+                          </div>
+                        </div>
+                      </td>
 
-              {execMessage && (
-                <div className="mt-3 p-2.5 bg-cyan-950/60 border border-cyan-800/60 rounded-lg text-xs text-cyan-200 flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span>{execMessage}</span>
-                </div>
-              )}
-            </div>
+                      {/* Predicted Demand */}
+                      <td className="py-3 px-4 text-right font-mono">
+                        <div className="font-bold text-white text-sm">
+                          {row.total1hDemand.toLocaleString()}{' '}
+                          <span className="text-[10px] text-slate-400 font-normal">trips</span>
+                        </div>
+                        <div className="text-[10px] text-slate-500">
+                          ~{row.avg15mDemand} / 15m
+                        </div>
+                      </td>
 
-            {/* Run Selection & Metadata Bar */}
-            <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3 text-xs">
-              <div className="flex items-center gap-3">
-                <span className="text-slate-400 font-semibold flex items-center gap-1.5">
-                  <Clock className="w-4 h-4 text-cyan-400" /> Select Forecast Run:
-                </span>
-                <select
-                  value={selectedRunId}
-                  onChange={(e) => handleSelectRun(e.target.value)}
-                  className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-white font-mono text-xs focus:border-cyan-500 focus:outline-none max-w-md"
-                >
-                  {forecastRuns.map((r) => (
-                    <option key={r.runId} value={r.runId}>
-                      {r.runId} — {r.status} ({r.actualPredictionsCount} preds, Horizon {r.forecastHorizonHours}h)
-                    </option>
-                  ))}
-                </select>
-              </div>
+                      {/* Available Vehicles */}
+                      <td className="py-3 px-4 text-right font-mono">
+                        <div className="font-bold text-slate-200 text-sm">
+                          {row.availableVehicles}{' '}
+                          <span className="text-[10px] text-slate-400 font-normal">vehicles</span>
+                        </div>
+                        <div className="text-[10px] text-slate-500">
+                          Capacity: {Math.round(row.hourlySupplyCapacity)} trips/h
+                        </div>
+                      </td>
 
-              {currentRunDetails && (
-                <div className="flex items-center gap-2 text-xs">
-                  <span className="text-slate-400">Generated:</span>
-                  <span className="text-white font-mono">
-                    {new Date(currentRunDetails.run.generationTimestamp).toLocaleTimeString('en-IN', {
-                      timeZone: 'Asia/Kolkata',
-                      hour12: true,
-                    })}
-                  </span>
-                  <span className="text-slate-600">•</span>
-                  <span className="text-slate-400">Data Freshness:</span>
-                  <span className="text-emerald-400 font-mono">
-                    {currentRunDetails.run.dataFreshnessSeconds}s ({currentRunDetails.run.inputFreshnessStatus})
-                  </span>
-                </div>
-              )}
-            </div>
+                      {/* Demand Status */}
+                      <td className="py-3 px-4 text-center">
+                        {row.shortageSeverity === 'CRITICAL' && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-red-950/80 text-red-300 border border-red-800/80">
+                            <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
+                            Critical Shortage
+                          </span>
+                        )}
+                        {row.shortageSeverity === 'MODERATE' && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-950/80 text-amber-300 border border-amber-800/80">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                            Moderate Deficit
+                          </span>
+                        )}
+                        {row.shortageSeverity === 'BALANCED' && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-950/80 text-emerald-300 border border-emerald-800/80">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                            Balanced
+                          </span>
+                        )}
+                        {row.shortageSeverity === 'SURPLUS' && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-cyan-950/80 text-cyan-300 border border-cyan-800/80">
+                            <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
+                            Surplus Fleet
+                          </span>
+                        )}
+                      </td>
 
-            {/* Run Summary Cards */}
-            {currentRunDetails && (
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
-                <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-3.5">
-                  <span className="text-[11px] text-slate-400 uppercase font-semibold">Run Status</span>
-                  <div className="text-base font-bold text-white mt-1 flex items-center gap-1.5">
-                    <span className={`w-2.5 h-2.5 rounded-full ${currentRunDetails.run.status === 'COMPLETED' ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
-                    <span>{currentRunDetails.run.status}</span>
-                  </div>
-                  <span className="text-[10px] text-slate-500 font-mono">Model {currentRunDetails.run.modelVersion}</span>
-                </div>
-
-                <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-3.5">
-                  <span className="text-[11px] text-slate-400 uppercase font-semibold">Temporal Resolution</span>
-                  <div className="text-base font-bold text-cyan-400 mt-1">
-                    {currentRunDetails.run.temporalResolution}
-                  </div>
-                  <span className="text-[10px] text-slate-500">60-minute true intervals</span>
-                </div>
-
-                <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-3.5">
-                  <span className="text-[11px] text-slate-400 uppercase font-semibold">Total Raw Demand</span>
-                  <div className="text-base font-bold text-slate-300 mt-1">
-                    {currentRunDetails.run.summary.totalRawPredictedDemand.toLocaleString()}
-                  </div>
-                  <span className="text-[10px] text-slate-500">Uncalibrated base trips</span>
-                </div>
-
-                <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-3.5">
-                  <span className="text-[11px] text-slate-400 uppercase font-semibold">Total Calibrated Demand</span>
-                  <div className="text-base font-bold text-emerald-400 mt-1">
-                    {currentRunDetails.run.summary.totalCalibratedPredictedDemand.toLocaleString()}
-                  </div>
-                  <span className="text-[10px] text-slate-500">Empirical GVMC calibrated</span>
-                </div>
-
-                <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-3.5 col-span-2 md:col-span-1">
-                  <span className="text-[11px] text-slate-400 uppercase font-semibold">Predictions / Coverage</span>
-                  <div className="text-base font-bold text-white mt-1">
-                    {currentRunDetails.run.actualPredictionsCount} / {currentRunDetails.run.expectedPredictionsCount}
-                  </div>
-                  <span className="text-[10px] text-slate-500">
-                    {currentRunDetails.run.zonesForecastedCount} of {currentRunDetails.run.zonesConfiguredCount} zones
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {/* Zone Demand Predictions Table */}
-            <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg">
-              <div className="p-4 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <Layers className="w-4 h-4 text-cyan-400" />
-                  <h4 className="text-sm font-bold text-white">
-                    Zone Demand Predictions Matrix (Raw Model vs Geographically Calibrated)
-                  </h4>
-                </div>
-
-                <div className="relative">
-                  <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-500" />
-                  <input
-                    type="text"
-                    placeholder="Search zone by name or ID..."
-                    value={runSearchQuery}
-                    onChange={(e) => setRunSearchQuery(e.target.value)}
-                    className="pl-8 pr-3 py-1 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 w-64"
-                  />
-                </div>
-              </div>
-
-              <div className="overflow-x-auto max-h-[460px] overflow-y-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-950/80 text-slate-400 uppercase font-semibold text-[10px] sticky top-0 z-10 border-b border-slate-800">
-                    <tr>
-                      <th className="py-2.5 px-3">Zone</th>
-                      <th className="py-2.5 px-3">Target Time (IST)</th>
-                      <th className="py-2.5 px-3">Resolution</th>
-                      <th className="py-2.5 px-3 text-right">Raw Model Pred</th>
-                      <th className="py-2.5 px-3 text-center">Transfer Factor</th>
-                      <th className="py-2.5 px-3 text-right text-emerald-400">Calibrated Pred</th>
-                      <th className="py-2.5 px-3">Empirical Evidence Source</th>
-                      <th className="py-2.5 px-3 text-center">Confidence Interval</th>
+                      {/* Action */}
+                      <td className="py-3 px-4 text-right">
+                        <span className="text-xs font-medium text-cyan-400 hover:text-cyan-200 inline-flex items-center gap-0.5">
+                          {isSelected ? 'Reset' : 'Focus'}
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </span>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800/60 font-mono">
-                    {currentRunDetails?.predictions
-                      .filter((p) => {
-                        if (!runSearchQuery) return true;
-                        const q = runSearchQuery.toLowerCase();
-                        return p.zoneId.toLowerCase().includes(q) || p.zoneName.toLowerCase().includes(q);
-                      })
-                      .map((pred) => {
-                        const targetTime = new Date(pred.targetTimestamp);
-                        const timeStr = targetTime.toLocaleTimeString('en-IN', {
-                          timeZone: 'Asia/Kolkata',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                          hour12: true,
-                        });
-                        return (
-                          <tr key={pred.id} className="hover:bg-slate-800/40 transition">
-                            <td className="py-2 px-3 font-sans">
-                              <span className="font-bold text-white">{pred.zoneId}</span>
-                              <span className="text-slate-400 ml-1.5 font-normal text-[11px] truncate block max-w-xs">
-                                {pred.zoneName}
-                              </span>
-                            </td>
-                            <td className="py-2 px-3 text-slate-300">
-                              {timeStr}
-                            </td>
-                            <td className="py-2 px-3">
-                              <span className="px-1.5 py-0.5 rounded text-[10px] bg-indigo-950 text-indigo-300 border border-indigo-800">
-                                {pred.temporalResolution}
-                              </span>
-                            </td>
-                            <td className="py-2 px-3 text-right text-slate-300 font-bold">
-                              {pred.rawModelPrediction} <span className="text-[10px] text-slate-500 font-normal">trips/hr</span>
-                            </td>
-                            <td className="py-2 px-3 text-center font-bold text-cyan-400">
-                              {pred.calibrationFactor.toFixed(2)}x
-                            </td>
-                            <td className="py-2 px-3 text-right text-emerald-400 font-bold text-sm">
-                              {pred.calibratedPrediction} <span className="text-[10px] text-emerald-600 font-normal">trips/hr</span>
-                            </td>
-                            <td className="py-2 px-3 font-sans text-[11px] text-slate-400 truncate max-w-xs">
-                              {pred.calibrationSource}
-                            </td>
-                            <td className="py-2 px-3 text-center text-[11px] text-slate-400">
-                              [{pred.lowerConfidenceBound} – {pred.upperConfidenceBound}] ({Math.round(pred.confidenceScore * 100)}%)
-                            </td>
-                          </tr>
-                        );
-                      })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
 
-            {/* Requirement 7: Technical Gap Analysis Disclosure Panel */}
-            {gapAnalysis && (
-              <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg">
-                <button
-                  onClick={() => setShowGapAnalysisDetails(!showGapAnalysisDetails)}
-                  className="w-full p-4 flex items-center justify-between text-left hover:bg-slate-800/50 transition cursor-pointer"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
-                    <div>
-                      <h4 className="text-xs font-bold text-white uppercase tracking-wider">
-                        Requirement 7 Technical Gap Analysis: Genuine 15-Minute Operational Demand Forecasting
-                      </h4>
-                      <p className="text-[11px] text-slate-400 mt-0.5">
-                        Scientific disclosure of minimum data, feature engineering, model training, and validation requirements.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                      GAP ANALYSIS
-                    </span>
-                    {showGapAnalysisDetails ? (
-                      <ChevronUp className="w-4 h-4 text-slate-400" />
-                    ) : (
-                      <ChevronDown className="w-4 h-4 text-slate-400" />
-                    )}
-                  </div>
-                </button>
-
-                {showGapAnalysisDetails && (
-                  <div className="p-5 pt-0 border-t border-slate-800 space-y-4 text-xs">
-                    <div className="p-3 bg-slate-950 border border-slate-800 rounded-lg text-slate-300 leading-relaxed text-[11px]">
-                      <strong className="text-amber-400">Current Operational Approach:</strong>{' '}
-                      {gapAnalysis.currentApproach}
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* Minimum Additional Data */}
-                      <div className="bg-slate-950/60 border border-slate-800/80 rounded-lg p-3.5 space-y-2">
-                        <span className="font-bold text-cyan-300 text-xs flex items-center gap-1.5">
-                          <Database className="w-3.5 h-3.5" /> 1. Minimum Additional Data Required
-                        </span>
-                        <ul className="space-y-1.5 text-[11px] text-slate-300 list-disc list-inside">
-                          {gapAnalysis.minimumAdditionalData.map((d, idx) => (
-                            <li key={idx} className="leading-relaxed">{d}</li>
-                          ))}
-                        </ul>
-                      </div>
-
-                      {/* Feature Engineering */}
-                      <div className="bg-slate-950/60 border border-slate-800/80 rounded-lg p-3.5 space-y-2">
-                        <span className="font-bold text-indigo-300 text-xs flex items-center gap-1.5">
-                          <Layers className="w-3.5 h-3.5" /> 2. Feature Engineering Required
-                        </span>
-                        <ul className="space-y-1.5 text-[11px] text-slate-300 list-disc list-inside">
-                          {gapAnalysis.featureEngineeringRequired.map((f, idx) => (
-                            <li key={idx} className="leading-relaxed">{f}</li>
-                          ))}
-                        </ul>
-                      </div>
-
-                      {/* Model Training */}
-                      <div className="bg-slate-950/60 border border-slate-800/80 rounded-lg p-3.5 space-y-2">
-                        <span className="font-bold text-emerald-300 text-xs flex items-center gap-1.5">
-                          <Zap className="w-3.5 h-3.5" /> 3. Model Training & Loss Function Required
-                        </span>
-                        <ul className="space-y-1.5 text-[11px] text-slate-300 list-disc list-inside">
-                          {gapAnalysis.modelTrainingRequired.map((m, idx) => (
-                            <li key={idx} className="leading-relaxed">{m}</li>
-                          ))}
-                        </ul>
-                      </div>
-
-                      {/* Validation Methodology */}
-                      <div className="bg-slate-950/60 border border-slate-800/80 rounded-lg p-3.5 space-y-2">
-                        <span className="font-bold text-purple-300 text-xs flex items-center gap-1.5">
-                          <ShieldCheck className="w-3.5 h-3.5" /> 4. Validation Methodology Required
-                        </span>
-                        <ul className="space-y-1.5 text-[11px] text-slate-300 list-disc list-inside">
-                          {gapAnalysis.validationMethodologyRequired.map((v, idx) => (
-                            <li key={idx} className="leading-relaxed">{v}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    </div>
-
-                    <div className="p-3 bg-cyan-950/30 border border-cyan-800/40 rounded-lg text-cyan-200 text-[11px] font-sans">
-                      <strong>Scientific Integrity Declaration:</strong> {gapAnalysis.antiSlopDeclaration}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
+        {/* Table Footer */}
+        <div className="p-3 bg-slate-950/70 border-t border-slate-800/80 text-[11px] text-slate-400 flex flex-wrap items-center justify-between gap-2 px-4">
+          <div>
+            Showing <strong className="text-white">{filteredZoneRows.length}</strong> of{' '}
+            <strong className="text-white">{zones.length}</strong> zones
           </div>
-        )}
+          <div className="text-slate-500">
+            Last updated:{' '}
+            <span className="text-slate-400 font-mono">
+              {lastRefreshedAt.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour12: true })} IST
+            </span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };
-

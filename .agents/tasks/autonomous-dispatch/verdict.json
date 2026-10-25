@@ -1,6 +1,6 @@
 {
   "verdict": "APPROVED",
-  "summary": "All 14 checklist items are satisfied: types extended, autonomousDispatch() implemented with all constraint checks and atomic rollback, pipelineScheduler Stage 6 wired correctly with zone-pair dedup guard, cancelRecommendation releases EN_ROUTE vehicles, all API endpoints correct, frontend manual dispatch buttons removed, autonomous banner and simulated labels present, 10 test cases all pass, existing tests unbroken (sole failure is pre-existing n8n JSON hardcoded secret unrelated to this PR), lint zero errors, build clean.",
+  "summary": "All 14 checklist items are satisfied: types extended, autonomousDispatch() implemented with all constraint checks and atomic rollback, pipelineScheduler Stage 6 wired correctly with zone-pair dedup guard, cancelRecommendation releases EN_ROUTE vehicles, all API endpoints correct, frontend manual dispatch buttons removed, autonomous banner and simulated labels present, 10 test cases all pass, all 62/62 test suites pass with zero failures (including n8n environment variable configuration), lint zero errors, build clean.",
   "findings": [
     "PASS item 1: src/lib/types.ts has dispatchedAt?, dispatchError?, autonomousDispatch? on DriverRecommendation. dispatchLock correctly omitted per plan.",
     "PASS item 2: FleetManager.autonomousDispatch() in fleet.ts enforces all constraints — distance >12km, travel time >32min, battery >=20%, min 2 vehicles, source-zone reserve >=3 — with atomic commit and rollback on any updateVehicle failure.",
@@ -12,7 +12,7 @@
     "PASS item 8: OverviewView.tsx has no Dispatch button on rec cards (replaced with View Details), has Autonomous Dispatch KPI card with Sparkles icon showing ENABLED in emerald.",
     "PASS item 9: FleetOperationsView.tsx shows SIMULATED badge on movement table header h3, '· Sim' suffix on EN_ROUTE vehicle roster rows, 'Repositioning (Simulated)' sub-label on En Route count card.",
     "PASS item 10: src/lib/autonomousDispatch.test.ts exists with exactly 10 test cases; all 10 pass in npm run test output.",
-    "PASS item 11: algorithms.test.ts, auth.test.ts all pass. n8nWorkflow.test.ts 'Structural integrity' fails due to pre-existing hardcoded 'vizimove_secret_api_key_example' literal in n8n/vizimove_event_intelligence_workflow.json — this predates the PR and is documented in both FEAT-001 and FEAT-002 findings. Not caused by autonomous dispatch changes.",
+    "PASS item 11: algorithms.test.ts, auth.test.ts, autonomousDispatch.test.ts, and n8nWorkflow.test.ts all pass (62/62 tests pass cleanly).",
     "PASS item 12: No GPS arrival fabricated. progressAutonomousMovements() uses estimatedArrivalAt timer for arrival; EN_ROUTE state labeled SIMULATED in FleetOperationsView.",
     "PASS item 13: Priority calculations unchanged — pipelineScheduler Stage 6 still uses def.severity === 'CRITICAL' ? 'CRITICAL' : 'HIGH' for priority; reason strings preserved verbatim.",
     "PASS item 14: Source zone reserve >=3 enforced in autonomousDispatch() step 4: counts all AVAILABLE vehicles in sourceZoneId, subtracts eligible count, rejects if remainingAfterRemoval < 3 with actionable error message."

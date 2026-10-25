@@ -1,1 +1,204 @@
 @import "tailwindcss";
+
+/* Leaflet Container & Dark UI Overrides */
+.leaflet-container {
+  background-color: #020617 !important;
+  font-family: inherit;
+  outline: none;
+}
+
+.leaflet-bar {
+  border: 1px solid rgba(51, 65, 85, 0.8) !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5) !important;
+  border-radius: 8px !important;
+  overflow: hidden;
+}
+
+.leaflet-bar a {
+  background-color: #0f172a !important;
+  color: #38bdf8 !important;
+  border-bottom: 1px solid rgba(51, 65, 85, 0.6) !important;
+}
+
+.leaflet-bar a:hover {
+  background-color: #1e293b !important;
+  color: #ffffff !important;
+}
+
+/* Custom Tooltip */
+.leaflet-tooltip.vizag-leaflet-tooltip {
+  background: rgba(15, 23, 42, 0.95) !important;
+  border: 1px solid rgba(56, 189, 248, 0.4) !important;
+  border-radius: 8px !important;
+  color: #f8fafc !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6) !important;
+  padding: 6px 10px !important;
+  backdrop-filter: blur(8px);
+}
+
+.leaflet-tooltip-top:before {
+  border-top-color: rgba(15, 23, 42, 0.95) !important;
+}
+
+/* Custom Div Icon Reset */
+.vizag-custom-div-icon {
+  background: transparent !important;
+  border: none !important;
+}
+
+/* Visakhapatnam Area Name Marker Card */
+.vizag-area-marker {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  transform: translateZ(0);
+  transition: transform 0.15s ease, z-index 0.15s ease;
+}
+
+.vizag-area-marker:hover {
+  transform: scale(1.08) translateY(-2px);
+  z-index: 1000 !important;
+}
+
+.vizag-area-marker.selected {
+  transform: scale(1.12) translateY(-3px);
+  z-index: 1100 !important;
+}
+
+.vizag-area-marker .marker-card {
+  background: rgba(15, 23, 42, 0.94);
+  border: 1.5px solid var(--zone-color, #0284c7);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.7), inset 0 0 8px rgba(0, 0, 0, 0.4);
+  border-radius: 6px;
+  padding: 3px 6px;
+  width: 118px;
+  text-align: center;
+  backdrop-filter: blur(6px);
+  pointer-events: auto;
+}
+
+.vizag-area-marker.selected .marker-card {
+  border-color: #38bdf8;
+  box-shadow: 0 0 18px rgba(56, 189, 248, 0.8), inset 0 0 8px rgba(56, 189, 248, 0.25);
+  background: rgba(8, 47, 73, 0.98);
+}
+
+.vizag-area-marker .marker-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5px;
+}
+
+.vizag-area-marker .marker-id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 8.5px;
+  font-weight: 700;
+  color: #38bdf8;
+  line-height: 1;
+}
+
+.vizag-area-marker .marker-metric {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 8.5px;
+  font-weight: 800;
+  color: var(--zone-color, #38bdf8);
+  line-height: 1;
+}
+
+.vizag-area-marker .marker-title {
+  font-size: 10px;
+  font-weight: 700;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
+  letter-spacing: -0.1px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+.vizag-area-marker .marker-subtitle {
+  font-size: 8.5px;
+  color: #94a3b8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.1;
+  margin-top: 1px;
+}
+
+.vizag-area-marker .marker-pin-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--zone-color, #38bdf8);
+  border: 1.5px solid #0f172a;
+  margin-top: 1px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+}
+
+.vizag-area-marker.selected .marker-pin-dot {
+  background-color: #38bdf8;
+  box-shadow: 0 0 8px #38bdf8;
+}
+
+/* En-route Transit Bubble */
+.vizag-transit-icon {
+  background: transparent !important;
+  border: none !important;
+}
+
+.vizag-transit-bubble {
+  background: rgba(15, 23, 42, 0.95);
+  border: 1.5px solid #38bdf8;
+  border-radius: 12px;
+  padding: 1px 6px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6), 0 0 8px rgba(56, 189, 248, 0.4);
+}
+
+.vizag-transit-bubble .transit-icon {
+  font-size: 10px;
+}
+
+.vizag-transit-bubble .transit-badge {
+  font-family: ui-monospace, monospace;
+  font-size: 9px;
+  font-weight: 800;
+  color: #38bdf8;
+}
+
+/* Event Beacon Marker */
+.vizag-event-div-icon {
+  background: transparent !important;
+  border: none !important;
+}
+
+.vizag-event-pin {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(88, 28, 135, 0.92);
+  border: 1.5px solid #c084fc;
+  border-radius: 9999px;
+  padding: 2px 7px;
+  box-shadow: 0 0 12px rgba(168, 85, 247, 0.6);
+}
+
+.vizag-event-pin .event-core {
+  color: #f3e8ff;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.vizag-event-pin .event-tag {
+  color: #ffffff;
+  font-size: 9px;
+  font-weight: 700;
+  white-space: nowrap;
+}

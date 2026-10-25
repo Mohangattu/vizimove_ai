@@ -14,8 +14,9 @@ import {
   Sparkles,
   Clock,
   Play,
-  Database,
   RefreshCw,
+  Info,
+  ChevronRight,
 } from 'lucide-react';
 import {
   OperationsSummary,
@@ -26,6 +27,7 @@ import {
   VirtualVehicle,
 } from '../../lib/types';
 import { api } from '../../services/api';
+import { RealisticOperationalMap } from '../RealisticOperationalMap';
 
 interface OverviewViewProps {
   summary: OperationsSummary | null;
@@ -100,54 +102,18 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
     .filter((r) => r.status === 'PENDING')
     .slice(0, 3);
 
-  const upcomingEvents = events
-    .filter((e) => e.status === 'ACTIVE' || e.status === 'UPCOMING')
-    .slice(0, 2);
-
-  // Geographic SVG projection for 30 Visakhapatnam zones
-  const minLat = 17.56;
-  const maxLat = 17.94;
-  const minLng = 83.06;
-  const maxLng = 83.47;
-  const svgWidth = 760;
-  const svgHeight = 440;
-
-  const project = (lat: number, lng: number) => {
-    const x = ((lng - minLng) / (maxLng - minLng)) * (svgWidth - 60) + 30;
-    const y = ((maxLat - lat) / (maxLat - minLat)) * (svgHeight - 60) + 30;
-    return { x, y };
-  };
+  const activeDispatches = recommendations.filter((r) => r.status === 'DISPATCHED');
 
   const selectedZone = zones.find((z) => z.id === selectedZoneId) || zones[0];
   const selectedAnalysis = supplyDemand.find((s) => s.zoneId === selectedZoneId);
-
-  const getZoneFillColor = (zoneId: string) => {
-    const analysis = supplyDemand.find((s) => s.zoneId === zoneId);
-    if (!analysis) return '#334155';
-
-    if (mapLayer === 'demand') {
-      const d = analysis.eventAdjustedDemand;
-      if (d > 55) return 'rgba(239, 68, 68, 0.60)';
-      if (d > 40) return 'rgba(249, 115, 22, 0.50)';
-      if (d > 25) return 'rgba(234, 179, 8, 0.45)';
-      return 'rgba(59, 130, 246, 0.35)';
-    } else if (mapLayer === 'fleet') {
-      const v = analysis.availableVehicles;
-      if (v >= 25) return 'rgba(16, 185, 129, 0.65)';
-      if (v >= 15) return 'rgba(34, 197, 94, 0.50)';
-      if (v >= 8) return 'rgba(234, 179, 8, 0.45)';
-      return 'rgba(239, 68, 68, 0.55)';
-    } else {
-      if (analysis.shortageSeverity === 'CRITICAL') return 'rgba(239, 68, 68, 0.65)';
-      if (analysis.shortageSeverity === 'MODERATE') return 'rgba(245, 158, 11, 0.55)';
-      if (analysis.shortageSeverity === 'SURPLUS') return 'rgba(16, 185, 129, 0.55)';
-      return 'rgba(59, 130, 246, 0.40)';
-    }
-  };
+  const selectedZoneVehicles = vehicles.filter((v) => v.zoneId === selectedZoneId);
+  const selectedZoneEvents = events.filter((e) => e.associatedZoneId === selectedZoneId);
+  const incomingDispatches = activeDispatches.filter((d) => d.targetZoneId === selectedZoneId);
+  const outgoingDispatches = activeDispatches.filter((d) => d.sourceZoneId === selectedZoneId);
 
   return (
     <div className="space-y-6">
-      {/* KPI Cards Row */}
+      {/* Top Metropolitan Executive KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         {/* Next Hour Demand */}
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
@@ -196,22 +162,22 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
           </p>
         </div>
 
-        {/* Pending Repositionings */}
+        {/* Active En-Route / Repositionings */}
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
           <div className="flex items-center justify-between text-slate-400 mb-2">
-            <span className="text-xs font-semibold uppercase tracking-wider">Pending Rebalances</span>
-            <Navigation className="w-4 h-4 text-blue-400" />
+            <span className="text-xs font-semibold uppercase tracking-wider">Active En-Route</span>
+            <Navigation className="w-4 h-4 text-cyan-400" />
           </div>
-          <div className="text-2xl font-bold text-blue-400 mb-1">
-            {summary.pendingRecommendationsCount}{' '}
-            <span className="text-xs font-normal text-slate-400">repositioning tasks</span>
+          <div className="text-2xl font-bold text-cyan-400 mb-1">
+            {activeDispatches.length}{' '}
+            <span className="text-xs font-normal text-slate-400">in-transit</span>
           </div>
           <p className="text-[11px] text-slate-400">
-            Optimized for minimal deadhead transit times
+            {summary.pendingRecommendationsCount} pending rebalance dispatches
           </p>
         </div>
 
-        {/* Autonomous Dispatch KPI */}
+        {/* Autonomous Dispatch Status */}
         <div className="bg-slate-900 border border-emerald-800/40 rounded-xl p-5 shadow-sm">
           <div className="flex items-center justify-between text-slate-400 mb-2">
             <span className="text-xs font-semibold uppercase tracking-wider">Autonomous Dispatch</span>
@@ -229,6 +195,208 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                 })} IST`
               : 'Pipeline active — 15-min cycles'}
           </p>
+        </div>
+      </div>
+
+      {/* Prominent Metropolitan Interactive Operations Map */}
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+          <div>
+            <h2 className="text-base font-bold text-white flex items-center gap-2">
+              <Layers className="w-5 h-5 text-cyan-400" />
+              Visakhapatnam Real-Time Operational Map
+              <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-800 text-cyan-300 border border-cyan-800/60 font-semibold">
+                30 GVMC Zones
+              </span>
+            </h2>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Interactive spatial monitoring • Click any zone polygon to inspect demand, fleet inventory, and live en-route transit
+            </p>
+          </div>
+
+          {/* Map Layer Switcher */}
+          <div className="flex items-center space-x-1 bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs">
+            <button
+              onClick={() => setMapLayer('imbalance')}
+              className={`px-3 py-1.5 rounded-md font-medium transition cursor-pointer ${
+                mapLayer === 'imbalance'
+                  ? 'bg-cyan-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Supply-Demand Imbalance
+            </button>
+            <button
+              onClick={() => setMapLayer('demand')}
+              className={`px-3 py-1.5 rounded-md font-medium transition cursor-pointer ${
+                mapLayer === 'demand'
+                  ? 'bg-cyan-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Demand Intensity
+            </button>
+            <button
+              onClick={() => setMapLayer('fleet')}
+              className={`px-3 py-1.5 rounded-md font-medium transition cursor-pointer ${
+                mapLayer === 'fleet'
+                  ? 'bg-cyan-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Fleet Availability
+            </button>
+          </div>
+        </div>
+
+        {/* Map Grid Layout: Realistic Map + Zone Details Inspector */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+          {/* Realistic Spatial Map Canvas */}
+          <div className="lg:col-span-2">
+            <RealisticOperationalMap
+              zones={zones}
+              supplyDemand={supplyDemand}
+              events={events}
+              vehicles={vehicles}
+              activeDispatches={activeDispatches}
+              selectedZoneId={selectedZoneId}
+              onSelectZone={setSelectedZoneId}
+              mapLayer={mapLayer}
+              onChangeLayer={setMapLayer}
+              heightClassName="h-[520px]"
+            />
+          </div>
+
+          {/* Zone Operational Inspector Card */}
+          <div className="bg-slate-950/90 border border-slate-800 rounded-xl p-4 flex flex-col justify-between text-xs space-y-3">
+            {selectedZone && selectedAnalysis ? (
+              <div className="space-y-3.5">
+                <div className="border-b border-slate-800 pb-3">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-mono text-cyan-400 font-bold bg-cyan-950 px-2 py-0.5 rounded border border-cyan-800">
+                      {selectedZone.id}
+                    </span>
+                    <span
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${
+                        selectedAnalysis.shortageSeverity === 'CRITICAL'
+                          ? 'bg-red-950 text-red-400 border border-red-800'
+                          : selectedAnalysis.shortageSeverity === 'SURPLUS'
+                          ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
+                          : 'bg-blue-950 text-blue-400 border border-blue-800'
+                      }`}
+                    >
+                      {selectedAnalysis.shortageSeverity}
+                    </span>
+                  </div>
+                  <h3 className="text-sm font-bold text-white mt-1">{selectedZone.name}</h3>
+                  <span className="text-[10px] text-slate-400 block mt-0.5">{selectedZone.category}</span>
+                  <p className="text-[11px] text-slate-400 mt-1 line-clamp-2">
+                    {selectedZone.description}
+                  </p>
+                </div>
+
+                {/* Demand & Fleet Inventory Metrics */}
+                <div className="bg-slate-900/80 p-3 rounded-lg border border-slate-800/80 space-y-2 text-[11px]">
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400">Demand (Next 60m):</span>
+                    <strong className="text-white font-mono">
+                      {selectedAnalysis.eventAdjustedDemand} trips/hr
+                      {selectedAnalysis.eventAdjustedDemand > selectedAnalysis.baseDemand && (
+                        <span className="text-purple-400 font-normal ml-1">
+                          (+{selectedAnalysis.eventAdjustedDemand - selectedAnalysis.baseDemand} event)
+                        </span>
+                      )}
+                    </strong>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400">Available Vehicles:</span>
+                    <strong className="text-emerald-400 font-mono">
+                      {selectedAnalysis.availableVehicles} vehicles (of {selectedAnalysis.totalFleetInZone} total)
+                    </strong>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-slate-400">Hourly Supply Capacity:</span>
+                    <span className="text-slate-300 font-mono">
+                      {selectedAnalysis.hourlySupplyCapacity} trips/hr
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center pt-2 border-t border-slate-800">
+                    <span className="text-slate-400">Net Balance Delta:</span>
+                    {selectedAnalysis.unmetDemand > 0 ? (
+                      <strong className="text-red-400 font-mono">
+                        -{selectedAnalysis.unmetDemand} trips (DEFICIT)
+                      </strong>
+                    ) : (
+                      <strong className="text-emerald-400 font-mono">
+                        +{selectedAnalysis.excessVehicles} veh (SURPLUS)
+                      </strong>
+                    )}
+                  </div>
+                </div>
+
+                {/* Incoming / Outgoing En-Route Movements */}
+                {(incomingDispatches.length > 0 || outgoingDispatches.length > 0) && (
+                  <div className="bg-cyan-950/40 border border-cyan-800/40 p-2.5 rounded-lg text-[11px] space-y-1">
+                    <div className="flex items-center gap-1.5 text-cyan-300 font-semibold">
+                      <Navigation className="w-3.5 h-3.5" />
+                      <span>Active Movements for Zone:</span>
+                    </div>
+                    {incomingDispatches.map((d) => (
+                      <p key={d.id} className="text-slate-300 text-[10.5px]">
+                        • <strong className="text-cyan-300">+{d.recommendedVehicleCount} veh</strong> incoming from {d.sourceZoneId} (ETA: ~{d.estimatedTravelTimeMin}m)
+                      </p>
+                    ))}
+                    {outgoingDispatches.map((d) => (
+                      <p key={d.id} className="text-slate-300 text-[10.5px]">
+                        • <strong className="text-amber-300">-{d.recommendedVehicleCount} veh</strong> en route to {d.targetZoneId}
+                      </p>
+                    ))}
+                  </div>
+                )}
+
+                {/* Active Events in This Zone */}
+                {selectedZoneEvents.length > 0 && (
+                  <div className="bg-purple-950/40 border border-purple-800/40 p-2.5 rounded-lg text-[11px]">
+                    <div className="flex items-center gap-1.5 text-purple-300 font-bold mb-1">
+                      <Calendar className="w-3.5 h-3.5" />
+                      <span>Zone Event: {selectedZoneEvents[0].name}</span>
+                    </div>
+                    <p className="text-[10.5px] text-purple-200">
+                      Venue: {selectedZoneEvents[0].venueName} • Est. {selectedZoneEvents[0].estimatedAttendance?.toLocaleString() ?? '10,000+'} crowd
+                    </p>
+                  </div>
+                )}
+
+                {/* Spatial Zone Metadata */}
+                <div className="text-[10.5px] text-slate-400 space-y-1 bg-slate-900/40 p-2.5 rounded border border-slate-800/60">
+                  <div className="flex justify-between">
+                    <span>Centroid:</span>
+                    <span className="font-mono text-slate-300">
+                      {selectedZone.centroid.lat}°N, {selectedZone.centroid.lng}°E
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Surface Area:</span>
+                    <span className="text-slate-300">{selectedZone.areaKm2} km²</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Activity Density:</span>
+                    <span className="text-slate-300">{selectedZone.activityDensityScore} / 1.0</span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-slate-400 text-center py-8">Select a zone on the map to inspect.</p>
+            )}
+
+            <button
+              onClick={() => onNavigateTab('supply-demand')}
+              className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-cyan-300 hover:text-white rounded-lg text-xs font-semibold transition cursor-pointer flex items-center justify-center gap-1.5 border border-slate-700/80 shadow-sm"
+            >
+              <span>Explore All 30 Zones in Supply & Demand</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -326,191 +494,6 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
             </li>
           ))}
         </ul>
-      </div>
-
-      {/* Integrated Spatial Demand Map of Visakhapatnam */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-          <div>
-            <h3 className="text-sm font-bold text-white flex items-center gap-2">
-              <Layers className="w-4 h-4 text-cyan-400" />
-              Visakhapatnam Metropolitan Spatial Imbalance Map (30 Zones)
-            </h3>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Click any zone polygon to inspect real-time demand, fleet supply, and shortages
-            </p>
-          </div>
-
-          <div className="flex items-center space-x-1 bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs">
-            <button
-              onClick={() => setMapLayer('imbalance')}
-              className={`px-3 py-1.5 rounded-md font-medium transition cursor-pointer ${
-                mapLayer === 'imbalance' ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Imbalance
-            </button>
-            <button
-              onClick={() => setMapLayer('demand')}
-              className={`px-3 py-1.5 rounded-md font-medium transition cursor-pointer ${
-                mapLayer === 'demand' ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Demand Heat
-            </button>
-            <button
-              onClick={() => setMapLayer('fleet')}
-              className={`px-3 py-1.5 rounded-md font-medium transition cursor-pointer ${
-                mapLayer === 'fleet' ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Fleet Supply
-            </button>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-          {/* Spatial SVG Map */}
-          <div className="lg:col-span-2 bg-slate-950 border border-slate-800 rounded-xl p-3 relative overflow-hidden flex items-center justify-center min-h-[360px]">
-            <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} className="w-full h-auto select-none">
-              {/* Bay of Bengal Sea Coastline */}
-              <path
-                d="M 460,0 Q 560,120 530,240 T 680,440 L 760,440 L 760,0 Z"
-                fill="#082f49"
-                opacity="0.35"
-              />
-              <text
-                x={svgWidth - 90}
-                y={svgHeight / 2}
-                fill="#0284c7"
-                fontSize="11"
-                fontWeight="bold"
-                letterSpacing="2"
-                opacity="0.4"
-                transform={`rotate(75, ${svgWidth - 90}, ${svgHeight / 2})`}
-              >
-                BAY OF BENGAL
-              </text>
-
-              {/* Zone Polygons */}
-              {zones.map((zone) => {
-                const points = zone.boundary
-                  .map((coord) => {
-                    const p = project(coord.lat, coord.lng);
-                    return `${p.x},${p.y}`;
-                  })
-                  .join(' ');
-
-                const centroid = project(zone.centroid.lat, zone.centroid.lng);
-                const isSelected = zone.id === selectedZoneId;
-                const analysis = supplyDemand.find((s) => s.zoneId === zone.id);
-
-                return (
-                  <g key={zone.id} className="cursor-pointer" onClick={() => setSelectedZoneId(zone.id)}>
-                    <polygon
-                      points={points}
-                      fill={getZoneFillColor(zone.id)}
-                      stroke={isSelected ? '#38bdf8' : '#475569'}
-                      strokeWidth={isSelected ? 2.5 : 1}
-                      strokeDasharray={isSelected ? undefined : '2,2'}
-                      className="transition-all hover:opacity-90"
-                    />
-                    <circle
-                      cx={centroid.x}
-                      cy={centroid.y}
-                      r={isSelected ? 5.5 : 3.5}
-                      fill={isSelected ? '#38bdf8' : '#ffffff'}
-                      stroke="#0f172a"
-                      strokeWidth={1.5}
-                    />
-                    <text
-                      x={centroid.x}
-                      y={centroid.y - 7}
-                      textAnchor="middle"
-                      fill="#ffffff"
-                      fontSize="9"
-                      fontWeight="bold"
-                      className="pointer-events-none drop-shadow"
-                    >
-                      {zone.id}
-                    </text>
-                  </g>
-                );
-              })}
-
-              {/* Event Pins */}
-              {events.filter((evt) => evt.latitude !== null && evt.longitude !== null).map((evt) => {
-                const p = project(evt.latitude!, evt.longitude!);
-                return (
-                  <g key={evt.id} className="pointer-events-none">
-                    <circle cx={p.x} cy={p.y} r={10} fill="none" stroke="#c084fc" strokeWidth={1} strokeDasharray="2,2" />
-                    <circle cx={p.x} cy={p.y} r={4.5} fill="#a855f7" stroke="#ffffff" strokeWidth={1} />
-                  </g>
-                );
-              })}
-            </svg>
-          </div>
-
-          {/* Zone Mini Inspector */}
-          <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-4 flex flex-col justify-between text-xs">
-            {selectedZone && selectedAnalysis ? (
-              <div className="space-y-3">
-                <div className="border-b border-slate-800 pb-2.5">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-mono text-cyan-400 font-bold bg-cyan-950 px-1.5 py-0.5 rounded border border-cyan-800">
-                      {selectedZone.id}
-                    </span>
-                    <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${
-                        selectedAnalysis.shortageSeverity === 'CRITICAL'
-                          ? 'bg-red-950 text-red-400 border border-red-800'
-                          : selectedAnalysis.shortageSeverity === 'SURPLUS'
-                          ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
-                          : 'bg-blue-950 text-blue-400 border border-blue-800'
-                      }`}
-                    >
-                      {selectedAnalysis.shortageSeverity}
-                    </span>
-                  </div>
-                  <h4 className="text-sm font-bold text-white">{selectedZone.name}</h4>
-                  <p className="text-[11px] text-slate-400 mt-1 line-clamp-2">
-                    {selectedZone.description}
-                  </p>
-                </div>
-
-                <div className="space-y-2 text-[11px]">
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Demand (Next Hr):</span>
-                    <strong className="text-white">{selectedAnalysis.eventAdjustedDemand} trips/hr</strong>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Available Vehicles:</span>
-                    <strong className="text-emerald-400">{selectedAnalysis.availableVehicles} vehicles</strong>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Hourly Capacity:</span>
-                    <span className="text-slate-200">{selectedAnalysis.hourlySupplyCapacity} trips/hr</span>
-                  </div>
-                  <div className="flex justify-between pt-2 border-t border-slate-800">
-                    <span className="text-slate-400">Net Delta:</span>
-                    {selectedAnalysis.unmetDemand > 0 ? (
-                      <strong className="text-red-400">-{selectedAnalysis.unmetDemand} trips (DEFICIT)</strong>
-                    ) : (
-                      <strong className="text-emerald-400">+{selectedAnalysis.excessVehicles} veh (SURPLUS)</strong>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ) : null}
-
-            <button
-              onClick={() => onNavigateTab('supply-demand')}
-              className="mt-3 w-full py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded text-xs font-semibold transition cursor-pointer flex items-center justify-center gap-1"
-            >
-              Open Full 30-Zone Matrix <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
       </div>
 
       {/* Two Column: Deficit Corridors vs Staging Surplus Reserves */}
@@ -620,7 +603,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
         </div>
       </div>
 
-      {/* Top Repositioning Actions Panel */}
+      {/* Queued Repositionings */}
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center space-x-2">

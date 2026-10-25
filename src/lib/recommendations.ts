@@ -8,6 +8,7 @@ import { VIZAG_ZONES, calculateHaversineDistance, estimateTravelTimeMinutes, get
 import { FleetManager } from './fleet';
 import { analyzeAllZonesSupplyDemand, getSupplyDemandRankings } from './supplyDemand';
 import { getEventsForZone } from './events';
+import { forecast15mForZone } from './forecasting';
 import { persistentStore } from '../db/store';
 
 export class RecommendationEngine {
@@ -17,140 +18,239 @@ export class RecommendationEngine {
   constructor() {}
 
   /**
-   * Generates optimal repositioning recommendations based on current supply-demand state.
+   * Generates optimal repositioning recommendations based on 60-minute operational demand forecast.
+   * Leverages 15-minute intervals (4 quarter-hours) to detect sustained deficits and event surges.
+   * Enforces all operational constraints (distance ≤ 12km, travel time ≤ 32min, batch 2-15, reserve ≥ 3, battery ≥ 20%).
+   * Dispatches eligible recommendations autonomously and records forecast evidence.
    */
   public generateRecommendations(
     fleetManager: FleetManager,
     targetTime: Date = new Date(),
-    maxRecommendations: number = 6
+    maxRecommendations: number = 6,
+    autoDispatch: boolean = false
   ): DriverRecommendation[] {
-    const analyses = analyzeAllZonesSupplyDemand(fleetManager, targetTime);
-    const { deficitZones, surplusZones } = getSupplyDemandRankings(analyses);
+    const allEvents = persistentStore.getEvents();
+    const zones = VIZAG_ZONES;
 
-    const generated: DriverRecommendation[] = [];
-
-    // Track available vehicles per surplus zone that haven't been allocated yet
-    const availablePoolByZone: Map<string, string[]> = new Map();
-    for (const surplus of surplusZones) {
-      const availableVehicles = fleetManager
-        .getAvailableVehiclesInZone(surplus.zoneId)
-        .map((v) => v.id);
-      availablePoolByZone.set(surplus.zoneId, availableVehicles);
+    // 1. Calculate 60-minute demand across the four upcoming 15-minute intervals for all zones
+    interface Zone60mAnalysis {
+      zone: (typeof zones)[0];
+      demand60m: number;
+      capacity60m: number;
+      deficit60m: number;
+      surplus60m: number;
+      neededVehicles: number;
+      peak15mDemand: number;
+      peak15mInterval: string;
+      availableVehicles: number;
+      activeEvent?: string;
     }
 
-    let targetsToEvaluate = deficitZones;
+    const intervalLabels = ['0-15m', '15-30m', '30-45m', '45-60m'];
+    const analyses60m: Zone60mAnalysis[] = [];
 
-    // If no immediate deficit at current off-peak snapshot, evaluate proactive upcoming horizon (targetTime + 2h or event zones)
-    if (targetsToEvaluate.length === 0) {
-      const peakTargetTime = new Date(targetTime.getTime() + 2 * 3600 * 1000);
-      const horizonAnalyses = analyzeAllZonesSupplyDemand(fleetManager, peakTargetTime);
-      const horizonDeficits = getSupplyDemandRankings(horizonAnalyses).deficitZones;
+    for (const zone of zones) {
+      const zoneEvents = getEventsForZone(zone.id, allEvents);
+      const activeEvt = zoneEvents.find((e) => e.status === 'ACTIVE' || e.status === 'UPCOMING');
 
-      if (horizonDeficits.length > 0) {
-        targetsToEvaluate = horizonDeficits;
-      } else {
-        // Evaluate event host zones needing proactive staging
-        const eventDeficits = analyses
-          .filter((a) => {
-            const evts = getEventsForZone(a.zoneId);
-            return evts.some((e) => e.status === 'ACTIVE' || e.status === 'UPCOMING');
-          })
-          .sort((a, b) => b.eventAdjustedDemand - a.eventAdjustedDemand);
-        targetsToEvaluate = eventDeficits;
+      let demand60m = 0;
+      let peak15mDemand = 0;
+      let peak15mInterval = intervalLabels[0];
+
+      for (let i = 0; i < 4; i++) {
+        const intervalTarget = new Date(targetTime.getTime() + i * 15 * 60 * 1000);
+        const f15 = forecast15mForZone(zone, intervalTarget, allEvents);
+        demand60m += f15.eventAdjustedDemand;
+        if (f15.eventAdjustedDemand > peak15mDemand) {
+          peak15mDemand = Math.round(f15.eventAdjustedDemand);
+          peak15mInterval = intervalLabels[i];
+        }
+      }
+
+      demand60m = Math.round(demand60m);
+      const availableVehicles = fleetManager.getAvailableVehiclesInZone(zone.id).length;
+      // 2.2 trips per vehicle per hour capacity standard
+      const capacity60m = Math.round(availableVehicles * 2.2 * 10) / 10;
+      const deficit60m = Math.max(0, Math.round(demand60m - capacity60m));
+      const vehiclesNeededForDemand = Math.ceil(demand60m / 2.2);
+      const surplus60m = Math.max(0, availableVehicles - vehiclesNeededForDemand);
+      const neededVehicles = Math.max(0, Math.ceil(deficit60m / 2.2));
+
+      analyses60m.push({
+        zone,
+        demand60m,
+        capacity60m,
+        deficit60m,
+        surplus60m,
+        neededVehicles,
+        peak15mDemand,
+        peak15mInterval,
+        availableVehicles,
+        activeEvent: activeEvt ? activeEvt.name : undefined,
+      });
+    }
+
+    // 2. Rank deficit and surplus zones
+    let deficitZones = analyses60m
+      .filter((a) => a.deficit60m > 0 || (a.activeEvent && a.availableVehicles < 10))
+      .sort((a, b) => b.deficit60m - a.deficit60m);
+
+    // Proactive event / peak horizon fallback if current window has no deficit
+    if (deficitZones.length === 0) {
+      deficitZones = analyses60m
+        .filter((a) => a.activeEvent !== undefined || a.demand60m > a.capacity60m * 0.85)
+        .sort((a, b) => b.demand60m - a.demand60m);
+    }
+
+    const surplusZones = analyses60m
+      .filter((a) => a.surplus60m >= 3 && a.availableVehicles >= 5)
+      .sort((a, b) => b.surplus60m - a.surplus60m);
+
+    // Track available eligible vehicles per surplus zone (battery ≥ 20%, state AVAILABLE)
+    const availablePoolByZone: Map<string, string[]> = new Map();
+    for (const surplus of surplusZones) {
+      const eligibleVehicles = fleetManager
+        .getAvailableVehiclesInZone(surplus.zone.id)
+        .filter((v) => v.batteryOrFuelLevel >= 20 && !v.assignedRecommendationId)
+        .map((v) => v.id);
+      availablePoolByZone.set(surplus.zone.id, eligibleVehicles);
+    }
+
+    // Build duplicate guard: check corridors already DISPATCHED within the last 15 minutes
+    const nowMs = targetTime.getTime();
+    const fifteenMinAgoMs = nowMs - 15 * 60 * 1000;
+    const activeDispatchedPairs = new Set<string>();
+    for (const r of persistentStore.getRecommendations()) {
+      if (
+        (r.status === 'DISPATCHED' || r.status === 'PENDING') &&
+        new Date(r.createdAt).getTime() >= fifteenMinAgoMs
+      ) {
+        activeDispatchedPairs.add(`${r.sourceZoneId}:${r.targetZoneId}`);
       }
     }
 
-    // Match each deficit or event zone with nearest eligible surplus zones
-    for (const deficit of targetsToEvaluate) {
+    const generated: DriverRecommendation[] = [];
+
+    // Match deficit zones with nearest eligible surplus zones
+    for (const deficit of deficitZones) {
       if (generated.length >= maxRecommendations) break;
 
-      const targetZone = getZoneById(deficit.zoneId);
-      if (!targetZone) continue;
+      let vehiclesShortage = Math.max(deficit.neededVehicles, deficit.deficit60m > 0 ? Math.ceil(deficit.deficit60m / 2.2) : 3);
+      if (vehiclesShortage < 2) vehiclesShortage = 2; // Operational batch size minimum is 2
 
-      let remainingShortageVehicles = deficit.unmetDemand > 0 ? Math.ceil(deficit.unmetDemand / 2.2) : 3;
-      if (remainingShortageVehicles <= 0) continue;
-
-      // Check for active events in target zone
-      const zoneEvents = getEventsForZone(deficit.zoneId);
-      const activeEvent = zoneEvents.find((e) => e.status === 'ACTIVE' || e.status === 'UPCOMING');
-
-      // Rank potential surplus sources by travel distance
+      // Rank candidate surplus zones by Haversine distance
       const candidates = surplusZones
         .map((surplus) => {
-          const sourceZone = getZoneById(surplus.zoneId)!;
-          const distKm = calculateHaversineDistance(sourceZone.centroid, targetZone.centroid);
-          const travelTimeMin = estimateTravelTimeMinutes(distKm, targetTime.getHours() >= 17 && targetTime.getHours() <= 20);
-          const availableList = availablePoolByZone.get(surplus.zoneId) || [];
+          const distKm = calculateHaversineDistance(surplus.zone.centroid, deficit.zone.centroid);
+          const travelTimeMin = estimateTravelTimeMinutes(
+            distKm,
+            targetTime.getHours() >= 17 && targetTime.getHours() <= 20
+          );
+          const eligibleList = availablePoolByZone.get(surplus.zone.id) || [];
           return {
             surplus,
-            sourceZone,
             distKm,
             travelTimeMin,
-            availableList,
+            eligibleList,
           };
         })
-        .filter((c) => c.distKm > 0 && c.travelTimeMin <= 32 && c.availableList.length > 0)
+        .filter((c) => {
+          return (
+            c.distKm > 0 &&
+            c.distKm <= 12.0 &&
+            c.travelTimeMin <= 32 &&
+            c.eligibleList.length >= 2 &&
+            c.eligibleList.length - 2 >= 3 // Ensure leaving at least 3 vehicles in reserve
+          );
+        })
         .sort((a, b) => a.travelTimeMin - b.travelTimeMin);
 
       for (const candidate of candidates) {
-        if (remainingShortageVehicles <= 0) break;
+        if (vehiclesShortage < 2) break;
         if (generated.length >= maxRecommendations) break;
 
+        const corridorKey = `${candidate.surplus.zone.id}:${deficit.zone.id}`;
+        if (activeDispatchedPairs.has(corridorKey)) {
+          continue; // Duplicate guard: prevent re-dispatch on recently active corridor
+        }
+
+        // Safe batch allocation: leave at least 3 vehicles in source reserve, cap at 15
         const maxCanTake = Math.min(
-          remainingShortageVehicles,
-          Math.min(candidate.availableList.length, candidate.surplus.excessVehicles || 2)
+          15,
+          Math.min(
+            vehiclesShortage,
+            Math.max(2, candidate.eligibleList.length - 3)
+          )
         );
 
-        if (maxCanTake <= 0) continue;
+        if (maxCanTake < 2) continue;
 
-        // Take the vehicles from the pool
-        const allocatedVehicleIds = candidate.availableList.splice(0, maxCanTake);
-        remainingShortageVehicles -= maxCanTake;
+        // Allocate vehicles atomically from pool
+        const allocatedVehicleIds = candidate.eligibleList.splice(0, maxCanTake);
+        vehiclesShortage -= maxCanTake;
 
-        // Calculate expected operational benefit (trips served)
+        // Calculate expected trips served in 60m window (2.2 trips/veh/hr)
         const expectedTrips = Math.round(maxCanTake * 2.2 * 10) / 10;
 
         // Priority calculation
         let priority: RecommendationPriority = 'LOW';
-        if (deficit.unmetDemand >= 15 || activeEvent) {
+        if (deficit.deficit60m >= 15 || deficit.activeEvent) {
           priority = 'CRITICAL';
-        } else if (deficit.unmetDemand >= 8) {
+        } else if (deficit.deficit60m >= 8) {
           priority = 'HIGH';
-        } else if (deficit.unmetDemand >= 4) {
+        } else if (deficit.deficit60m >= 3) {
           priority = 'MEDIUM';
         }
 
-        const reason = activeEvent
-          ? `Event surge from "${activeEvent.name}" creates estimated shortage of ${deficit.unmetDemand} trips/hr in ${targetZone.name}. Reposition ${maxCanTake} idle vehicles from ${candidate.sourceZone.name} (${candidate.distKm} km, ~${candidate.travelTimeMin} min).`
-          : `High demand peak creates shortage of ${deficit.unmetDemand} trips/hr in ${targetZone.name}. Surplus of ${candidate.surplus.excessVehicles} idle vehicles available in ${candidate.sourceZone.name}.`;
+        const reason = deficit.activeEvent
+          ? `60-Min Forecast: Event surge from "${deficit.activeEvent}" creates shortage of ${deficit.deficit60m} trips/hr in ${deficit.zone.name} (peak ${deficit.peak15mDemand} trips in ${deficit.peak15mInterval}). Dispatched ${maxCanTake} surplus vehicles from ${candidate.surplus.zone.name} (${candidate.distKm} km, ~${candidate.travelTimeMin} min).`
+          : `60-Min Forecast: Projected demand of ${deficit.demand60m} trips exceeds capacity (${deficit.capacity60m} trips) with ${deficit.deficit60m} trip deficit in ${deficit.zone.name}. Dispatched ${maxCanTake} vehicles from surplus zone ${candidate.surplus.zone.name}.`;
 
         const recId = `REC-VZ-${this.recommendationCounter++}`;
-        const nowIso = new Date().toISOString();
+        const nowIso = targetTime.toISOString();
 
         const recommendation: DriverRecommendation = {
           id: recId,
-          sourceZoneId: candidate.sourceZone.id,
-          sourceZoneName: candidate.sourceZone.name,
-          targetZoneId: targetZone.id,
-          targetZoneName: targetZone.name,
+          sourceZoneId: candidate.surplus.zone.id,
+          sourceZoneName: candidate.surplus.zone.name,
+          targetZoneId: deficit.zone.id,
+          targetZoneName: deficit.zone.name,
           recommendedVehicleCount: maxCanTake,
           allocatedVehicleIds,
           priority,
           status: 'PENDING',
+          autonomousDispatch: true,
           estimatedTravelDistanceKm: candidate.distKm,
           estimatedTravelTimeMin: candidate.travelTimeMin,
           expectedNetTripsServed: expectedTrips,
-          confidenceScore: activeEvent ? 0.92 : 0.86,
+          confidenceScore: deficit.activeEvent ? 0.93 : 0.88,
           reason,
           supportingData: {
-            sourceSurplus: candidate.surplus.excessVehicles,
-            targetShortage: deficit.unmetDemand,
-            targetDemand: deficit.eventAdjustedDemand,
-            activeEvent: activeEvent ? activeEvent.name : undefined,
+            sourceSurplus: candidate.surplus.surplus60m,
+            targetShortage: deficit.deficit60m,
+            targetDemand: deficit.demand60m,
+            forecastHorizonMinutes: 60,
+            peak15mDemand: deficit.peak15mDemand,
+            peak15mInterval: deficit.peak15mInterval,
+            effectiveCapacity: deficit.capacity60m,
+            activeEvent: deficit.activeEvent,
           },
           createdAt: nowIso,
           updatedAt: nowIso,
         };
+
+        if (autoDispatch) {
+          // Automatically dispatch recommendation without requiring manual UI approval
+          const dispatchResult = fleetManager.autonomousDispatch(recommendation, nowIso);
+          if (dispatchResult.success) {
+            recommendation.status = 'DISPATCHED';
+            recommendation.dispatchedAt = nowIso;
+            recommendation.allocatedVehicleIds = dispatchResult.assignedVehicleIds;
+            activeDispatchedPairs.add(corridorKey);
+          } else {
+            recommendation.dispatchError = dispatchResult.error;
+          }
+        }
 
         this.recommendations.set(recId, recommendation);
         persistentStore.upsertRecommendation(recommendation);

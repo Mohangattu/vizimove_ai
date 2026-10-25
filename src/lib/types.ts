@@ -226,6 +226,10 @@ export interface VirtualVehicle {
   movementProgressPct?: number;
   tripsCompletedToday: number;
   repositionCountToday: number;
+  // Computed tracking telemetry fields (Simulated)
+  elapsedMinutes?: number;
+  remainingMinutes?: number;
+  movementStatusLabel?: string;
 }
 
 export interface SupplyDemandAnalysis {
@@ -268,6 +272,10 @@ export interface DriverRecommendation {
     sourceSurplus: number;
     targetShortage: number;
     targetDemand: number;
+    forecastHorizonMinutes?: number;
+    peak15mDemand?: number;
+    peak15mInterval?: string;
+    effectiveCapacity?: number;
     activeEvent?: string;
   };
   createdAt: string;
